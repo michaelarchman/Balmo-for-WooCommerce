@@ -1,0 +1,15 @@
+/* Balmo for WooCommerce — Admin CSS (minimalne) */
+
+.balmo-step { margin-top: 20px; }
+
+.balmo-status { display: inline-block; padding: 2px 8px; border-radius: 3px; font-size: 12px; font-weight: 600; }
+.balmo-status-pending   { background: #f0f0f0; color: #555; }
+.balmo-status-running   { background: #fff8e5; color: #b45309; }
+.balmo-status-done      { background: #e6f4ea; color: #1a7f37; }
+.balmo-status-error     { background: #fde8e8; color: #b91c1c; }
+.balmo-status-cancelled { background: #e5e7eb; color: #6b7280; }
+
+#balmo-preview-wrap table { font-size: 12px; }
+#balmo-preview-wrap td, #balmo-preview-wrap th { white-space: nowrap; }
+
+progress { height: 18px; }
