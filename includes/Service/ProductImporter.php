@@ -349,15 +349,11 @@ class ProductImporter
         }
     }
 
-    // Routing zdjęć wg trybu z ustawień
+    // Zapisz zdjęcia jako zewnętrzne URL (bez pobierania)
     private function saveImages(int $post_id, array $mapped): void
     {
-        $mode = get_option('balmo_image_mode', 'none');
-
-        if ($mode === 'external') {
+        if (get_option('balmo_image_mode', 'none') === 'external') {
             $this->saveExternalImages($post_id, $mapped);
-        } elseif ($mode === 'sideload') {
-            $this->saveSideloadedImages($post_id, $mapped);
         }
     }
 
@@ -373,17 +369,19 @@ class ProductImporter
             }
         }
 
+        $has_gallery_columns = false;
         $gallery_ids = [];
         for ($i = 2; $i <= 7; $i++) {
             $field = "_gallery_image_{$i}";
-            if (!isset($mapped[$field])) continue;
+            if (!array_key_exists($field, $mapped)) continue;
+            $has_gallery_columns = true;
             $url = esc_url_raw((string) $mapped[$field]);
             if ($url === '') continue;
             $id = $this->getOrCreateExternalAttachment($url, $post_id);
             if ($id) $gallery_ids[] = $id;
         }
 
-        if (!empty($gallery_ids)) {
+        if ($has_gallery_columns) {
             update_post_meta($post_id, '_product_image_gallery', implode(',', $gallery_ids));
         }
     }
@@ -417,8 +415,17 @@ class ProductImporter
 
         if (is_wp_error($attach_id) || !$attach_id) return 0;
 
-        update_post_meta((int) $attach_id, '_balmo_external_url', $url);
-        return (int) $attach_id;
+        $id = (int) $attach_id;
+        update_post_meta($id, '_balmo_external_url', $url);
+        update_post_meta($id, '_wp_attached_file', $url);
+        update_post_meta($id, '_wp_attachment_metadata', [
+            'width'  => 0,
+            'height' => 0,
+            'file'   => $url,
+            'sizes'  => [],
+        ]);
+
+        return $id;
     }
 
     private function guessMimeType(string $filename): string
@@ -436,74 +443,6 @@ class ProductImporter
     }
 
     // Tryb sideload — pobierz obraz i zapisz w bibliotece mediów
-    private function saveSideloadedImages(int $post_id, array $mapped): void
-    {
-        $main_url = isset($mapped['_thumbnail']) ? esc_url_raw((string) $mapped['_thumbnail']) : '';
-
-        if ($main_url !== '') {
-            $attach_id = $this->sideloadImage($main_url, $post_id);
-            if ($attach_id) {
-                set_post_thumbnail($post_id, $attach_id);
-            }
-        }
-
-        $gallery_ids = [];
-        for ($i = 2; $i <= 7; $i++) {
-            $field = "_gallery_image_{$i}";
-            if (!isset($mapped[$field])) continue;
-            $url = esc_url_raw((string) $mapped[$field]);
-            if ($url === '') continue;
-            $id = $this->sideloadImage($url, $post_id);
-            if ($id) $gallery_ids[] = $id;
-        }
-
-        if (!empty($gallery_ids)) {
-            update_post_meta($post_id, '_product_image_gallery', implode(',', $gallery_ids));
-        }
-    }
-
-    // Pobierz obraz z URL do media biblioteki WP
-    private function sideloadImage(string $url, int $post_id): int
-    {
-        if (empty($url) || !filter_var($url, FILTER_VALIDATE_URL)) return 0;
-
-        // Sprawdź czy obraz już istnieje w bibliotece (po URL)
-        global $wpdb;
-        $existing = (int) $wpdb->get_var($wpdb->prepare(
-            "SELECT post_id FROM {$wpdb->postmeta}
-             WHERE meta_key = '_balmo_source_url' AND meta_value = %s LIMIT 1",
-            $url
-        ));
-        if ($existing) return $existing;
-
-        require_once ABSPATH . 'wp-admin/includes/image.php';
-        require_once ABSPATH . 'wp-admin/includes/file.php';
-        require_once ABSPATH . 'wp-admin/includes/media.php';
-
-        $tmp_file = download_url($url, 20);
-        if (is_wp_error($tmp_file)) return 0;
-
-        $path     = wp_parse_url($url, PHP_URL_PATH) ?: '';
-        $filename = wp_basename($path);
-        if ($filename === '' || $filename === '.' || $filename === '/') {
-            $filename = 'balmo-image-' . md5($url) . '.jpg';
-        }
-
-        $file_array = [
-            'name'     => sanitize_file_name($filename),
-            'tmp_name' => $tmp_file,
-        ];
-
-        $attach_id = media_handle_sideload($file_array, $post_id);
-        if (is_wp_error($attach_id)) {
-            @unlink($tmp_file);
-            return 0;
-        }
-
-        update_post_meta($attach_id, '_balmo_source_url', $url);
-        return (int) $attach_id;
-    }
-
     private function logError(int $row_num, array $row_data, string $message): void
     {
         global $wpdb;

@@ -74,6 +74,13 @@ class ColumnMapper
             return ['result' => null, 'invalid_columns' => $invalid_columns];
         }
 
+        // Fallback dla feedów JSON/CSV Colibra:
+        // jeśli mapowanie nie ustawiło post_title, ale surowy rekord ma "name",
+        // użyj tej wartości, żeby nie wywalać całego produktu przez pusty tytuł.
+        if (empty($mapped['post_title']) && !empty($row['name'])) {
+            $mapped['post_title'] = trim((string) $row['name']);
+        }
+
         if ($import_mode === 'update') {
             $mapped = array_intersect_key($mapped, array_flip($this->update_fields));
         }

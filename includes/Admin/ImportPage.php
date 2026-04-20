@@ -75,6 +75,15 @@ class ImportPage
                             </select>
                         </td>
                     </tr>
+                    <tr>
+                        <th><?php esc_html_e('Zakres wierszy', 'balmo'); ?></th>
+                        <td>
+                            <input type="number" id="balmo_row_start" min="1" step="1" value="1" style="width:100px;">
+                            <span style="padding:0 8px;">-</span>
+                            <input type="number" id="balmo_row_end" min="1" step="1" value="" style="width:100px;" placeholder="koniec">
+                            <p class="description"><?php esc_html_e('Opcjonalnie ogranicz import do zakresu, np. 1-1000 albo 1001-2000. Puste "do wiersza" = do końca pliku.', 'balmo'); ?></p>
+                        </td>
+                    </tr>
                 </table>
                 <button type="button" id="balmo-btn-fetch" class="button button-primary">
                     <?php esc_html_e('Pobierz i sprawdź plik', 'balmo'); ?>
@@ -226,12 +235,37 @@ class ImportPage
         $match_by    = sanitize_text_field($_POST['match_by']    ?? 'sku');
         $import_mode = sanitize_text_field($_POST['import_mode'] ?? 'full');
         $total_rows  = (int) ($_POST['total_rows'] ?? 0);
+        $start_row   = max(1, (int) ($_POST['start_row'] ?? 1));
+        $end_row     = max(0, (int) ($_POST['end_row'] ?? 0));
+        $start_offset = $start_row - 1;
 
         // Weryfikacja ścieżki — tylko pliki w katalogu uploads/balmo/
         if (!self::isAllowedFilePath($file_path)) {
             wp_send_json_error(__('Nieprawidłowa ścieżka pliku.', 'balmo'));
             return;
         }
+
+        if ($total_rows < 1) {
+            wp_send_json_error(__('Plik nie zawiera danych do importu.', 'balmo'));
+            return;
+        }
+
+        if ($start_row > $total_rows) {
+            wp_send_json_error(__('Początek zakresu jest poza końcem pliku.', 'balmo'));
+            return;
+        }
+
+        if ($end_row === 0 || $end_row > $total_rows) {
+            $end_row = $total_rows;
+        }
+
+        if ($end_row < $start_row) {
+            wp_send_json_error(__('Koniec zakresu nie może być mniejszy niż początek.', 'balmo'));
+            return;
+        }
+
+        $end_offset   = $end_row;
+        $segment_rows = $end_row - $start_row + 1;
 
         // Pobierz match_by z profilu jeśli jest
         if ($mapping_id) {
@@ -250,11 +284,14 @@ class ImportPage
                 'import_mode' => $import_mode,
                 'match_by'    => $match_by,
                 'status'      => 'pending',
-                'total_rows'  => $total_rows,
+                'total_rows'  => $segment_rows,
+                'start_offset'=> $start_offset,
+                'end_offset'  => $end_offset,
+                'current_offset' => $start_offset,
                 'file_path'   => $file_path,
                 'delimiter'   => $delimiter,
             ],
-            ['%d', '%s', '%s', '%s', '%s', '%s', '%d', '%s', '%s']
+            ['%d', '%s', '%s', '%s', '%s', '%s', '%d', '%d', '%d', '%d', '%s', '%s']
         );
 
         $import_id = (int) $wpdb->insert_id;
@@ -272,11 +309,11 @@ class ImportPage
         }
 
         // Enqueue pierwszej transzy — AS przetwarza w tle, przeglądarka tylko monitoruje
-        as_enqueue_async_action('balmo_as_batch', [$import_id, 0], 'balmo');
+        as_enqueue_async_action('balmo_as_batch', [$import_id, $start_offset], 'balmo');
 
         wp_send_json_success([
             'import_id'  => $import_id,
-            'total_rows' => $total_rows,
+            'total_rows' => $segment_rows,
         ]);
     }
 

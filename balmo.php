@@ -28,7 +28,7 @@ define('BALMO_PLUGIN_URL',  plugin_dir_url(__FILE__));
 
 // Rozmiar pojedynczej transzy przy imporcie (wiersze CSV)
 define('BALMO_BATCH_SIZE', 200);
-define('BALMO_ASYNC_BATCH_SIZE', 5);
+define('BALMO_ASYNC_BATCH_SIZE', 10);
 define('BALMO_BATCH_TIME_LIMIT', 20);
 define('BALMO_HEARTBEAT_TTL', 180);
 
@@ -80,6 +80,8 @@ function activate(): void
             updated_rows   INT UNSIGNED     NOT NULL DEFAULT 0,
             skipped_rows   INT UNSIGNED     NOT NULL DEFAULT 0,
             error_rows     INT UNSIGNED     NOT NULL DEFAULT 0,
+            start_offset   INT UNSIGNED     NOT NULL DEFAULT 0,
+            end_offset     INT UNSIGNED     NOT NULL DEFAULT 0,
             current_offset INT UNSIGNED     NOT NULL DEFAULT 0,
             file_path      TEXT             NULL,
             delimiter      VARCHAR(5)       NOT NULL DEFAULT ',',
@@ -171,6 +173,12 @@ function maybe_migrate_db(): void
     }
     if (!in_array('delimiter', $import_log_cols, true)) {
         $wpdb->query("ALTER TABLE `" . table_import_log() . "` ADD COLUMN `delimiter` VARCHAR(5) NOT NULL DEFAULT ',' AFTER `file_path`");
+    }
+    if (!in_array('start_offset', $import_log_cols, true)) {
+        $wpdb->query("ALTER TABLE `" . table_import_log() . "` ADD COLUMN `start_offset` INT UNSIGNED NOT NULL DEFAULT 0 AFTER `error_rows`");
+    }
+    if (!in_array('end_offset', $import_log_cols, true)) {
+        $wpdb->query("ALTER TABLE `" . table_import_log() . "` ADD COLUMN `end_offset` INT UNSIGNED NOT NULL DEFAULT 0 AFTER `start_offset`");
     }
 
     $mappings_cols = $wpdb->get_col("SHOW COLUMNS FROM `" . table_mappings() . "`", 0);
@@ -265,6 +273,10 @@ add_action('balmo_as_batch', function (int $import_id, int $offset): void {
 
     if (!$log || in_array($log->status, ['done', 'error', 'cancelled'], true)) return;
 
+    $end_offset = isset($log->end_offset) && (int) $log->end_offset > 0
+        ? (int) $log->end_offset
+        : (int) $log->total_rows;
+
     if ($attempts >= 3 && (!is_array($heartbeat) || (int) ($heartbeat['offset'] ?? $offset) <= $offset)) {
         $row_number = (int) ($heartbeat['row_number'] ?? ($offset + 1));
         $identifier = trim((string) ($heartbeat['sku'] ?? $heartbeat['product_id'] ?? ''));
@@ -278,7 +290,7 @@ add_action('balmo_as_batch', function (int $import_id, int $offset): void {
         ], ['%d', '%d', '%s', '%s']);
 
         $next_offset = $offset + 1;
-        $is_done     = $next_offset >= (int) $log->total_rows;
+        $is_done     = $next_offset >= $end_offset;
 
         $wpdb->query($wpdb->prepare(
             "UPDATE " . table_import_log() . "
@@ -370,7 +382,7 @@ add_action('balmo_as_batch', function (int $import_id, int $offset): void {
         return;
     }
     $next_offset = $result['next_offset'];
-    $is_done     = $next_offset >= (int) $log->total_rows;
+    $is_done     = $next_offset >= $end_offset;
     clear_offset_attempts($import_id, $offset);
 
     if ($is_done) {

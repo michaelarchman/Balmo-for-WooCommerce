@@ -87,7 +87,7 @@ class Settings
         register_setting('balmo_settings', 'balmo_image_mode', [
             'type'              => 'string',
             'sanitize_callback' => function (string $v): string {
-                return in_array($v, ['none', 'external', 'sideload'], true) ? $v : 'none';
+                return in_array($v, ['none', 'external'], true) ? $v : 'none';
             },
             'default' => 'none',
         ]);
@@ -209,9 +209,7 @@ class Settings
                                 <option value="external" <?php selected($image_mode, 'external'); ?>>
                                     <?php esc_html_e('Wyświetlaj z zewnętrznych URL (bez pobierania na serwer)', 'balmo'); ?>
                                 </option>
-                                <option value="sideload" <?php selected($image_mode, 'sideload'); ?>>
-                                    <?php esc_html_e('Pobierz i zapisz lokalnie w bibliotece mediów (spowalnia import)', 'balmo'); ?>
-                                </option>
+
                             </select>
                             <p class="description">
                                 <?php esc_html_e('Tryb "zewnętrzne URL" — zdjęcia wyświetlane są bezpośrednio z serwera dostawcy bez zajmowania miejsca na dysku. Wymaga mapowania kolumn ze zdjęciami.', 'balmo'); ?>

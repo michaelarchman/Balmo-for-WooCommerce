@@ -173,6 +173,8 @@ jQuery(function ($) {
             source_type: importState.sourceType,
             mapping_id:  importState.mappingId,
             total_rows:  importState.totalRows,
+            start_row:   parseInt($('#balmo_row_start').val(), 10) || 1,
+            end_row:     parseInt($('#balmo_row_end').val(), 10) || 0,
             source_url:  $('#balmo_csv_url').val() || '',
             import_mode: 'full'
         }, function (res) {
