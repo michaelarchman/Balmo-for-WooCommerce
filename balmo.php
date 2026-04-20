@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Balmo for WooCommerce
  * Description: Import produktów CSV z mapowaniem kolumn, formułami cenowymi i harmonogramem. Obsługa do 20 000 produktów w transzach.
- * Version:     1.0.0
+ * Version:     1.1.0
  * Author:      Michał Łuczak
  * Requires at least: 5.0
  * Requires PHP: 7.4
@@ -21,14 +21,14 @@ use Balmo\Admin\HistoryPage;
 use Balmo\Admin\Settings;
 use Balmo\Cron\ImportScheduler;
 
-define('BALMO_VERSION',     '1.0.0');
+define('BALMO_VERSION',     '1.1.0');
 define('BALMO_PLUGIN_FILE', __FILE__);
 define('BALMO_PLUGIN_DIR',  plugin_dir_path(__FILE__));
 define('BALMO_PLUGIN_URL',  plugin_dir_url(__FILE__));
 
 // Rozmiar pojedynczej transzy przy imporcie (wiersze CSV)
 define('BALMO_BATCH_SIZE', 200);
-define('BALMO_ASYNC_BATCH_SIZE', 25);
+define('BALMO_ASYNC_BATCH_SIZE', 5);
 define('BALMO_BATCH_TIME_LIMIT', 20);
 define('BALMO_HEARTBEAT_TTL', 180);
 
@@ -111,7 +111,9 @@ function activate(): void
         CREATE TABLE " . table_mappings() . " (
             id            BIGINT UNSIGNED  NOT NULL AUTO_INCREMENT,
             name          VARCHAR(255)     NOT NULL,
+            format        VARCHAR(5)       NOT NULL DEFAULT 'csv',
             source_type   VARCHAR(10)      NOT NULL DEFAULT 'all',
+            image_url_prefix VARCHAR(255)  NOT NULL DEFAULT '',
             column_map    LONGTEXT         NOT NULL,
             overrides     LONGTEXT         NULL,
             price_formula VARCHAR(500)     NULL,
@@ -133,9 +135,10 @@ function activate(): void
 
     // Domyślne ustawienia
     add_option('balmo_batch_size',       200);
-    add_option('balmo_image_import',     '0');
+    add_option('balmo_image_mode',       'none');
     add_option('balmo_default_status',   'publish');
     add_option('balmo_log_retention',    30);
+    update_option('balmo_db_version',    '1.3');
 }
 register_activation_hook(BALMO_PLUGIN_FILE, __NAMESPACE__ . '\activate');
 
@@ -152,23 +155,39 @@ register_deactivation_hook(BALMO_PLUGIN_FILE, __NAMESPACE__ . '\deactivate');
  */
 function maybe_migrate_db(): void
 {
-    $db_version = get_option('balmo_db_version', '0');
-    if (version_compare($db_version, '1.1', '>=')) return;
-
     global $wpdb;
-    $table = table_import_log();
 
-    // Sprawdź czy kolumny istnieją
-    $columns = $wpdb->get_col("SHOW COLUMNS FROM `{$table}`", 0);
-
-    if (!in_array('file_path', $columns, true)) {
-        $wpdb->query("ALTER TABLE `{$table}` ADD COLUMN `file_path` TEXT NULL AFTER `current_offset`");
-    }
-    if (!in_array('delimiter', $columns, true)) {
-        $wpdb->query("ALTER TABLE `{$table}` ADD COLUMN `delimiter` VARCHAR(5) NOT NULL DEFAULT ',' AFTER `file_path`");
+    if (!($wpdb instanceof \wpdb)) {
+        return;
     }
 
-    update_option('balmo_db_version', '1.1');
+    $import_log_cols = $wpdb->get_col("SHOW COLUMNS FROM `" . table_import_log() . "`", 0);
+    if (!is_array($import_log_cols)) {
+        return;
+    }
+
+    if (!in_array('file_path', $import_log_cols, true)) {
+        $wpdb->query("ALTER TABLE `" . table_import_log() . "` ADD COLUMN `file_path` TEXT NULL AFTER `current_offset`");
+    }
+    if (!in_array('delimiter', $import_log_cols, true)) {
+        $wpdb->query("ALTER TABLE `" . table_import_log() . "` ADD COLUMN `delimiter` VARCHAR(5) NOT NULL DEFAULT ',' AFTER `file_path`");
+    }
+
+    $mappings_cols = $wpdb->get_col("SHOW COLUMNS FROM `" . table_mappings() . "`", 0);
+    if (!is_array($mappings_cols)) {
+        return;
+    }
+
+    if (!in_array('format', $mappings_cols, true)) {
+        $wpdb->query("ALTER TABLE `" . table_mappings() . "` ADD COLUMN `format` VARCHAR(5) NOT NULL DEFAULT 'csv' AFTER `source_type`");
+        $mappings_cols[] = 'format';
+    }
+    if (!in_array('image_url_prefix', $mappings_cols, true)) {
+        $position = in_array('format', $mappings_cols, true) ? ' AFTER `format`' : '';
+        $wpdb->query("ALTER TABLE `" . table_mappings() . "` ADD COLUMN `image_url_prefix` VARCHAR(255) NOT NULL DEFAULT ''{$position}");
+    }
+
+    update_option('balmo_db_version', '1.3');
 }
 
 function get_background_batch_size(): int
@@ -284,7 +303,7 @@ add_action('balmo_as_batch', function (int $import_id, int $offset): void {
             return;
         }
 
-        as_enqueue_async_action('balmo_as_batch', [$import_id, $next_offset], 'balmo');
+        as_schedule_single_action(time() + 2, 'balmo_as_batch', [$import_id, $next_offset], 'balmo');
         return;
     }
 
@@ -317,6 +336,19 @@ add_action('balmo_as_batch', function (int $import_id, int $offset): void {
     }
 
     $batch_size  = get_background_batch_size();
+
+    // Zarządzanie pamięcią przed batchem
+    @ini_set('memory_limit', '512M');
+    wp_defer_term_counting(true);
+    wp_defer_comment_counting(true);
+    wp_suspend_cache_addition(true);
+
+    // Wyłącz Jetpack sync — synchronizuje każdy produkt i zjada RAM
+    if (class_exists('Automattic\Jetpack\Sync\Actions')) {
+        \Automattic\Jetpack\Sync\Actions::mark_sync_read_only();
+    }
+    add_filter('jetpack_sync_sender_should_load', '__return_false');
+    add_filter('jetpack_sync_prevent_sending_action', '__return_true');
 
     try {
         $importer = new \Balmo\Service\ProductImporter($import_id, $log, $mapping);
@@ -376,16 +408,65 @@ add_action('balmo_as_batch', function (int $import_id, int $offset): void {
     }
 
     if ($is_done) {
+        wp_defer_term_counting(false);
+        wp_defer_comment_counting(false);
+        wp_suspend_cache_addition(false);
         @unlink($file_path);
         clear_import_heartbeat($import_id);
         return;
     }
 
-    // Kolejkuj następną transzę natychmiast
+    // Wyczyść pamięć przed kolejnym batchem
+    wp_defer_term_counting(false);
+    wp_defer_comment_counting(false);
+    wp_suspend_cache_addition(false);
+    wp_cache_flush();
+    gc_collect_cycles();
+
+    // Kolejkuj następną transzę z opóźnieniem — wymusza nowy proces PHP
     mark_import_heartbeat($import_id, $next_offset);
-    as_enqueue_async_action('balmo_as_batch', [$import_id, $next_offset], 'balmo');
+    as_schedule_single_action(time() + 2, 'balmo_as_batch', [$import_id, $next_offset], 'balmo');
 
 }, 10, 2);
+
+// --- Filtry dla zewnętrznych załączników Balmo ---
+// Muszą działać zawsze (frontend + admin), dlatego poza is_admin().
+
+add_filter('wp_get_attachment_url', function ($url, $attachment_id) {
+    $attachment_id = (int) $attachment_id;
+    if (!$attachment_id) return $url;
+    $external = get_post_meta($attachment_id, '_balmo_external_url', true);
+    return $external ?: $url;
+}, 10, 2);
+
+add_filter('wp_get_attachment_image_src', function ($image, $attachment_id, $size, $icon) {
+    if ($image) return $image;
+    $attachment_id = (int) $attachment_id;
+    if (!$attachment_id) return $image;
+    $external = get_post_meta($attachment_id, '_balmo_external_url', true);
+    if ($external) return [$external, 800, 800, false];
+    return $image;
+}, 10, 4);
+
+add_filter('wp_get_attachment_metadata', function ($data, $attachment_id) {
+    if (!empty($data)) return $data;
+    $attachment_id = (int) $attachment_id;
+    if (!$attachment_id) return $data;
+    $external = get_post_meta($attachment_id, '_balmo_external_url', true);
+    if (!$external) return $data;
+    return [
+        'width'  => 800,
+        'height' => 800,
+        'file'   => wp_basename(wp_parse_url($external, PHP_URL_PATH) ?: 'image.jpg'),
+        'sizes'  => [],
+    ];
+}, 10, 2);
+
+add_filter('wp_calculate_image_srcset', function ($sources, $size_array, $image_src, $image_meta, $attachment_id) {
+    $attachment_id = (int) $attachment_id;
+    if ($attachment_id && get_post_meta($attachment_id, '_balmo_external_url', true)) return false;
+    return $sources;
+}, 10, 5);
 
 add_action('plugins_loaded', function (): void {
     maybe_migrate_db();

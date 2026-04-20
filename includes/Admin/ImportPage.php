@@ -6,6 +6,7 @@ if (!defined('ABSPATH')) exit;
 
 use Balmo\Service\CsvFetcher;
 use Balmo\Service\CsvValidator;
+use Balmo\Service\JsonFlattener;
 
 class ImportPage
 {
@@ -56,7 +57,8 @@ class ImportPage
                     <tr>
                         <th><?php esc_html_e('Prześlij plik', 'balmo'); ?></th>
                         <td>
-                            <input type="file" id="balmo_csv_file" accept=".csv,.txt">
+                            <input type="file" id="balmo_csv_file" accept=".csv,.txt,.json">
+                            <p class="description"><?php esc_html_e('CSV lub JSON — format określa wybrany profil mapowania.', 'balmo'); ?></p>
                         </td>
                     </tr>
                     <tr>
@@ -157,14 +159,20 @@ class ImportPage
 
         $source_type = sanitize_text_field($_POST['source_type'] ?? 'all');
         $url         = esc_url_raw(trim($_POST['csv_url'] ?? ''));
+        $mapping_id  = (int) ($_POST['mapping_id'] ?? 0);
 
-        // Upload lub URL
+        $format = self::detectFormat($mapping_id);
+
         if (!empty($_FILES['csv_file']['tmp_name'])) {
-            $result = CsvFetcher::fromUpload($_FILES['csv_file'], $source_type);
+            $result = $format === 'json'
+                ? JsonFlattener::fromUpload($_FILES['csv_file'], $source_type)
+                : CsvFetcher::fromUpload($_FILES['csv_file'], $source_type);
         } elseif (!empty($url)) {
-            $result = CsvFetcher::fromUrl($url, $source_type);
+            $result = $format === 'json'
+                ? JsonFlattener::fromUrl($url, $source_type)
+                : CsvFetcher::fromUrl($url, $source_type);
         } else {
-            wp_send_json_error(__('Podaj URL lub prześlij plik CSV.', 'balmo'));
+            wp_send_json_error(__('Podaj URL lub prześlij plik.', 'balmo'));
             return;
         }
 
@@ -173,18 +181,32 @@ class ImportPage
             return;
         }
 
-        // Walidacja
+        // Walidacja (plik jest już zawsze CSV w tym momencie)
         $validation = CsvValidator::validate($result['file_path'], $result['delimiter'], $source_type);
 
         wp_send_json_success([
             'file_path'   => $result['file_path'],
             'delimiter'   => $result['delimiter'],
             'source_type' => $source_type,
+            'format'      => $format,
             'total_rows'  => $result['total_rows'],
             'columns'     => $result['columns'],
             'preview'     => $result['preview'],
             'validation'  => $validation,
         ]);
+    }
+
+    // Format pochodzi wyłącznie z wybranego profilu mapowania
+    private static function detectFormat(int $mapping_id): string
+    {
+        if (!$mapping_id) return 'csv';
+
+        global $wpdb;
+        $fmt = $wpdb->get_var($wpdb->prepare(
+            "SELECT format FROM " . \Balmo\table_mappings() . " WHERE id = %d", $mapping_id
+        ));
+
+        return in_array($fmt, ['csv', 'json'], true) ? $fmt : 'csv';
     }
 
     // --- AJAX: Rozpocznij import ---

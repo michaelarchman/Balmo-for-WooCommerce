@@ -10,27 +10,32 @@ if (!defined('ABSPATH')) exit;
  */
 class ColumnMapper
 {
-    private array  $column_map;    // ['csv_col' => 'wc_field']
-    private array  $overrides;     // ['csv_col' => 'static_value'] lub ['wc_field' => 'static_value']
+    private array  $column_map;      // ['csv_col' => 'wc_field']
+    private array  $overrides;       // ['csv_col' => 'static_value'] lub ['wc_field' => 'static_value']
     private string $price_formula;
     private string $match_by;
-    private array  $update_fields; // pola do aktualizacji (tryb update)
+    private array  $update_fields;   // pola do aktualizacji (tryb update)
+    private string $image_url_prefix; // prefix URL dla zdjęć (np. https://drop.seltu.pl/)
+
+    private const IMAGE_FIELDS = ['_thumbnail', '_gallery_image_2', '_gallery_image_3', '_gallery_image_4', '_gallery_image_5', '_gallery_image_6', '_gallery_image_7'];
 
     public function __construct(?object $mapping)
     {
         if ($mapping) {
-            $this->column_map    = json_decode($mapping->column_map,    true) ?: [];
-            $this->overrides     = json_decode($mapping->overrides,     true) ?: [];
-            $this->price_formula = $mapping->price_formula ?? '';
-            $this->match_by      = $mapping->match_by ?? 'sku';
-            $this->update_fields = json_decode($mapping->update_fields, true) ?: ['_regular_price', '_stock', 'post_status'];
+            $this->column_map      = json_decode($mapping->column_map,    true) ?: [];
+            $this->overrides       = json_decode($mapping->overrides,     true) ?: [];
+            $this->price_formula   = $mapping->price_formula ?? '';
+            $this->match_by        = $mapping->match_by ?? 'sku';
+            $this->update_fields   = json_decode($mapping->update_fields, true) ?: ['_regular_price', '_stock', 'post_status'];
+            $this->image_url_prefix = rtrim($mapping->image_url_prefix ?? '', '/');
         } else {
             // Użyj auto-mapy z MappingPage
-            $this->column_map    = \Balmo\Admin\MappingPage::AUTO_MAP;
-            $this->overrides     = [];
-            $this->price_formula = '';
-            $this->match_by      = 'sku';
-            $this->update_fields = ['_regular_price', '_stock', 'post_status'];
+            $this->column_map       = \Balmo\Admin\MappingPage::AUTO_MAP;
+            $this->overrides        = [];
+            $this->price_formula    = '';
+            $this->match_by         = 'sku';
+            $this->update_fields    = ['_regular_price', '_stock', 'post_status'];
+            $this->image_url_prefix = '';
         }
     }
 
@@ -129,7 +134,15 @@ class ColumnMapper
             // Waga — zamień przecinek na kropkę
             '_weight' => str_replace(',', '.', $value),
 
-            // Cena — zamień przecinek na kropkę
+            // Zdjęcia — dodaj prefix jeśli URL jest relatywny
+            '_thumbnail',
+            '_gallery_image_2',
+            '_gallery_image_3',
+            '_gallery_image_4',
+            '_gallery_image_5',
+            '_gallery_image_6',
+            '_gallery_image_7' => $this->applyImagePrefix($value),
+
             default => $value,
         };
     }
@@ -160,6 +173,16 @@ class ColumnMapper
             return 'draft';
         }
         return get_option('balmo_default_status', 'publish');
+    }
+
+    private function applyImagePrefix(string $value): string
+    {
+        $value = trim($value);
+        if ($value === '' || $this->image_url_prefix === '') return $value;
+        if (str_starts_with($value, 'http://') || str_starts_with($value, 'https://') || str_starts_with($value, '//')) {
+            return $value;
+        }
+        return $this->image_url_prefix . '/' . ltrim($value, '/');
     }
 
     private function mapVatToTaxClass(string $vat): string

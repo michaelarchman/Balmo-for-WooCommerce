@@ -44,6 +44,8 @@ jQuery(function ($) {
         formData.append('nonce',       nonce);
         formData.append('source_type', sourceType);
 
+        formData.append('mapping_id', $('#balmo_mapping_id').val() || '0');
+
         if (file && file.files.length) {
             formData.append('csv_file', file.files[0]);
         } else {
@@ -271,13 +273,14 @@ jQuery(function ($) {
         $mapBody.append($row);
     }
 
-    // Auto-mapuj kolumny drop.seltu.pl
+    // Auto-mapuj kolumny drop.seltu.pl (CSV lub JSON w zależności od wybranego formatu)
     $('#balmo-btn-automap').on('click', function () {
         if ($mapBody.find('tr').length > 0) {
             if (!confirm('Zastąpić istniejące mapowanie auto-mapą?')) return;
         }
+        var format  = $('#balmo-mapping-format').val() || 'csv';
+        var autoMap = (format === 'json' ? window.balmoAutoMapJson : window.balmoAutoMap) || {};
         $mapBody.empty();
-        var autoMap = window.balmoAutoMap || {};
         $.each(autoMap, function (csvCol, wcField) {
             addMappingRow(csvCol, wcField, '');
         });
@@ -315,10 +318,11 @@ jQuery(function ($) {
     // Zapisz profil
     $('#balmo-btn-save-mapping').on('click', function () {
         var id          = $('#balmo-mapping-id').val();
-        var name        = $('#balmo-mapping-name').val().trim();
-        var sourceType  = $('#balmo-mapping-source-type').val();
-        var matchBy     = $('#balmo-mapping-match-by').val();
-        var formula     = $('#balmo-price-formula').val().trim();
+        var name            = $('#balmo-mapping-name').val().trim();
+        var sourceType      = $('#balmo-mapping-source-type').val();
+        var matchBy         = $('#balmo-mapping-match-by').val();
+        var formula         = $('#balmo-price-formula').val().trim();
+        var imageUrlPrefix  = $('#balmo-image-url-prefix').val().trim();
 
         if (!name) { alert('Podaj nazwę profilu.'); return; }
 
@@ -343,54 +347,42 @@ jQuery(function ($) {
             updateFields.push($(this).val());
         });
 
+        var format = $('#balmo-mapping-format').val() || 'csv';
+
         $.post(ajaxUrl, {
             action:        'balmo_save_mapping',
             nonce:         nonce,
             id:            id,
             name:          name,
+            format:        format,
             source_type:   sourceType,
             match_by:      matchBy,
-            price_formula: formula,
-            column_map:    columnMap,
-            overrides:     overrides,
-            update_fields: updateFields
+            price_formula:    formula,
+            image_url_prefix: imageUrlPrefix,
+            column_map:       columnMap,
+            overrides:        overrides,
+            update_fields:    updateFields
         }, function (res) {
             if (res.success) {
-                $('#balmo-mapping-id').val(res.data.id);
-                $('#balmo-mapping-form-title').text('Edytujesz: ' + name);
+                if (typeof res.data.id !== 'undefined') {
+                    $('#balmo-mapping-id').val(res.data.id);
+                    window.location.href = 'admin.php?page=balmo-mapping&action=edit&id=' + res.data.id;
+                    return;
+                }
                 $('#balmo-mapping-save-result').text('✓ ' + res.data.message);
-                setTimeout(function () { location.reload(); }, 1000);
             } else {
                 $('#balmo-mapping-save-result').text('✗ ' + res.data);
             }
         });
     });
 
-    // Edytuj profil
-    $(document).on('click', '.balmo-btn-edit-mapping', function () {
-        var id = $(this).data('id');
-        $.post(ajaxUrl, { action: 'balmo_load_mapping', nonce: nonce, id: id }, function (res) {
-            if (!res.success) return;
-            var d = res.data;
-            $('#balmo-mapping-id').val(d.id);
-            $('#balmo-mapping-name').val(d.name);
-            $('#balmo-mapping-source-type').val(d.source_type);
-            $('#balmo-mapping-match-by').val(d.match_by);
-            $('#balmo-price-formula').val(d.price_formula || '');
-            $('#balmo-mapping-form-title').text('Edytujesz: ' + d.name);
-
-            $mapBody.empty();
-            $.each(d.column_map, function (csvCol, wcField) {
-                addMappingRow(csvCol, wcField, d.overrides[csvCol] || '');
-            });
-
-            $('input[name="balmo_update_fields[]"]').each(function () {
-                $(this).prop('checked', d.update_fields.indexOf($(this).val()) !== -1);
-            });
-
-            $('html, body').animate({ scrollTop: $('#balmo-mapping-form-title').offset().top - 50 }, 300);
+    // Załaduj istniejące mapowanie na stronie edycji (dane wstrzyknięte przez PHP)
+    if (window.balmoEditMapping) {
+        var d = window.balmoEditMapping;
+        $.each(d.column_map, function (csvCol, wcField) {
+            addMappingRow(csvCol, wcField, d.overrides[csvCol] || '');
         });
-    });
+    }
 
     // Usuń profil
     $(document).on('click', '.balmo-btn-delete-mapping', function () {

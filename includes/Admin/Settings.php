@@ -84,10 +84,12 @@ class Settings
             'default' => 200,
         ]);
 
-        register_setting('balmo_settings', 'balmo_image_import', [
+        register_setting('balmo_settings', 'balmo_image_mode', [
             'type'              => 'string',
-            'sanitize_callback' => 'sanitize_text_field',
-            'default'           => '0',
+            'sanitize_callback' => function (string $v): string {
+                return in_array($v, ['none', 'external', 'sideload'], true) ? $v : 'none';
+            },
+            'default' => 'none',
         ]);
 
         register_setting('balmo_settings', 'balmo_default_status', [
@@ -118,18 +120,25 @@ class Settings
         ];
         if (!in_array($hook, $balmo_pages, true)) return;
 
+        $style_version  = file_exists(BALMO_PLUGIN_DIR . 'assets/admin.css')
+            ? (string) filemtime(BALMO_PLUGIN_DIR . 'assets/admin.css')
+            : BALMO_VERSION;
+        $script_version = file_exists(BALMO_PLUGIN_DIR . 'assets/admin.js')
+            ? (string) filemtime(BALMO_PLUGIN_DIR . 'assets/admin.js')
+            : BALMO_VERSION;
+
         wp_enqueue_style(
             'balmo-admin',
             BALMO_PLUGIN_URL . 'assets/admin.css',
             [],
-            BALMO_VERSION
+            $style_version
         );
 
         wp_enqueue_script(
             'balmo-admin',
             BALMO_PLUGIN_URL . 'assets/admin.js',
             ['jquery'],
-            BALMO_VERSION,
+            $script_version,
             true
         );
 
@@ -146,7 +155,7 @@ class Settings
         }
 
         $batch_size     = (int) get_option('balmo_batch_size', 200);
-        $image_import   = get_option('balmo_image_import', '0');
+        $image_mode     = get_option('balmo_image_mode', 'none');
         $default_status = get_option('balmo_default_status', 'publish');
         $log_retention  = (int) get_option('balmo_log_retention', 30);
         ?>
@@ -190,14 +199,23 @@ class Settings
                     </tr>
                     <tr>
                         <th scope="row">
-                            <label for="balmo_image_import"><?php esc_html_e('Importuj zdjęcia', 'balmo'); ?></label>
+                            <label for="balmo_image_mode"><?php esc_html_e('Zdjęcia produktów', 'balmo'); ?></label>
                         </th>
                         <td>
-                            <label>
-                                <input type="checkbox" id="balmo_image_import" name="balmo_image_import"
-                                       value="1" <?php checked($image_import, '1'); ?>>
-                                <?php esc_html_e('Pobieraj i importuj zdjęcia produktów z URL (znacznie spowalnia import)', 'balmo'); ?>
-                            </label>
+                            <select id="balmo_image_mode" name="balmo_image_mode">
+                                <option value="none" <?php selected($image_mode, 'none'); ?>>
+                                    <?php esc_html_e('Nie importuj zdjęć', 'balmo'); ?>
+                                </option>
+                                <option value="external" <?php selected($image_mode, 'external'); ?>>
+                                    <?php esc_html_e('Wyświetlaj z zewnętrznych URL (bez pobierania na serwer)', 'balmo'); ?>
+                                </option>
+                                <option value="sideload" <?php selected($image_mode, 'sideload'); ?>>
+                                    <?php esc_html_e('Pobierz i zapisz lokalnie w bibliotece mediów (spowalnia import)', 'balmo'); ?>
+                                </option>
+                            </select>
+                            <p class="description">
+                                <?php esc_html_e('Tryb "zewnętrzne URL" — zdjęcia wyświetlane są bezpośrednio z serwera dostawcy bez zajmowania miejsca na dysku. Wymaga mapowania kolumn ze zdjęciami.', 'balmo'); ?>
+                            </p>
                         </td>
                     </tr>
                     <tr>

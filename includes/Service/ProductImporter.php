@@ -182,8 +182,8 @@ class ProductImporter
 
         $post_id = wp_insert_post([
             'post_title'   => sanitize_text_field($title),
-            'post_content' => wp_kses_post($content),
-            'post_excerpt' => wp_kses_post($excerpt),
+            'post_content' => wp_slash($content),
+            'post_excerpt' => wp_slash($excerpt),
             'post_status'  => in_array($status, ['publish', 'draft', 'pending'], true) ? $status : 'publish',
             'post_type'    => 'product',
         ], true);
@@ -207,10 +207,10 @@ class ProductImporter
             $update['post_title'] = sanitize_text_field($mapped['post_title']);
         }
         if (isset($mapped['post_content'])) {
-            $update['post_content'] = wp_kses_post($mapped['post_content']);
+            $update['post_content'] = wp_slash($mapped['post_content']);
         }
         if (isset($mapped['post_excerpt'])) {
-            $update['post_excerpt'] = wp_kses_post($mapped['post_excerpt']);
+            $update['post_excerpt'] = wp_slash($mapped['post_excerpt']);
         }
         if (isset($mapped['post_status'])) {
             $status = $mapped['post_status'];
@@ -302,8 +302,8 @@ class ProductImporter
             wp_set_object_terms($post_id, array_map('trim', explode(',', $mapped['_tags'])), 'product_tag');
         }
 
-        // Zdjęcia — tylko jeśli włączone w ustawieniach
-        $this->saveImageUrls($post_id, $mapped);
+        // Zdjęcia
+        $this->saveImages($post_id, $mapped);
 
         // Wyczyść cache WooCommerce
         wc_delete_product_transients($post_id);
@@ -349,31 +349,116 @@ class ProductImporter
         }
     }
 
-    // Pobierz i przypisz zdjęcia z URL
-    private function saveImageUrls(int $post_id, array $mapped): void
+    // Routing zdjęć wg trybu z ustawień
+    private function saveImages(int $post_id, array $mapped): void
     {
-        $image_fields = [
-            '_thumbnail',
-            '_gallery_image_2',
-            '_gallery_image_3',
-            '_gallery_image_4',
-            '_gallery_image_5',
-            '_gallery_image_6',
-            '_gallery_image_7',
-        ];
+        $mode = get_option('balmo_image_mode', 'none');
 
-        foreach ($image_fields as $field) {
-            if (!array_key_exists($field, $mapped)) {
-                continue;
+        if ($mode === 'external') {
+            $this->saveExternalImages($post_id, $mapped);
+        } elseif ($mode === 'sideload') {
+            $this->saveSideloadedImages($post_id, $mapped);
+        }
+    }
+
+    // Tryb external — wirtualne załączniki WP z zewnętrznym URL
+    private function saveExternalImages(int $post_id, array $mapped): void
+    {
+        $main_url = isset($mapped['_thumbnail']) ? esc_url_raw((string) $mapped['_thumbnail']) : '';
+
+        if ($main_url !== '') {
+            $attach_id = $this->getOrCreateExternalAttachment($main_url, $post_id);
+            if ($attach_id) {
+                set_post_thumbnail($post_id, $attach_id);
             }
+        }
 
+        $gallery_ids = [];
+        for ($i = 2; $i <= 7; $i++) {
+            $field = "_gallery_image_{$i}";
+            if (!isset($mapped[$field])) continue;
             $url = esc_url_raw((string) $mapped[$field]);
-            if ($url === '') {
-                delete_post_meta($post_id, $field);
-                continue;
-            }
+            if ($url === '') continue;
+            $id = $this->getOrCreateExternalAttachment($url, $post_id);
+            if ($id) $gallery_ids[] = $id;
+        }
 
-            update_post_meta($post_id, $field, $url);
+        if (!empty($gallery_ids)) {
+            update_post_meta($post_id, '_product_image_gallery', implode(',', $gallery_ids));
+        }
+    }
+
+    // Utwórz wirtualny załącznik WP dla zewnętrznego URL (bez pobierania pliku)
+    private function getOrCreateExternalAttachment(string $url, int $post_id): int
+    {
+        global $wpdb;
+
+        $existing = (int) $wpdb->get_var($wpdb->prepare(
+            "SELECT post_id FROM {$wpdb->postmeta}
+             WHERE meta_key = '_balmo_external_url' AND meta_value = %s LIMIT 1",
+            $url
+        ));
+        if ($existing) return $existing;
+
+        $path     = wp_parse_url($url, PHP_URL_PATH) ?: '';
+        $filename = sanitize_file_name(wp_basename($path));
+        if ($filename === '' || $filename === '.') {
+            $filename = 'balmo-' . md5($url) . '.jpg';
+        }
+
+        $attach_id = wp_insert_post([
+            'post_title'     => $filename,
+            'post_status'    => 'inherit',
+            'post_type'      => 'attachment',
+            'post_mime_type' => $this->guessMimeType($filename),
+            'post_parent'    => $post_id,
+            'guid'           => $url,
+        ]);
+
+        if (is_wp_error($attach_id) || !$attach_id) return 0;
+
+        update_post_meta((int) $attach_id, '_balmo_external_url', $url);
+        return (int) $attach_id;
+    }
+
+    private function guessMimeType(string $filename): string
+    {
+        $ext = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
+        $map = [
+            'jpg'  => 'image/jpeg',
+            'jpeg' => 'image/jpeg',
+            'png'  => 'image/png',
+            'webp' => 'image/webp',
+            'gif'  => 'image/gif',
+            'avif' => 'image/avif',
+        ];
+        return $map[$ext] ?? 'image/jpeg';
+    }
+
+    // Tryb sideload — pobierz obraz i zapisz w bibliotece mediów
+    private function saveSideloadedImages(int $post_id, array $mapped): void
+    {
+        $main_url = isset($mapped['_thumbnail']) ? esc_url_raw((string) $mapped['_thumbnail']) : '';
+
+        if ($main_url !== '') {
+            $attach_id = $this->sideloadImage($main_url, $post_id);
+            if ($attach_id) {
+                set_post_thumbnail($post_id, $attach_id);
+            }
+        }
+
+        $gallery_ids = [];
+        for ($i = 2; $i <= 7; $i++) {
+            $field = "_gallery_image_{$i}";
+            if (!isset($mapped[$field])) continue;
+            $url = esc_url_raw((string) $mapped[$field]);
+            if ($url === '') continue;
+            $id = $this->sideloadImage($url, $post_id);
+            if ($id) $gallery_ids[] = $id;
+        }
+
+        if (!empty($gallery_ids)) {
+            update_post_meta($post_id, '_product_image_gallery', implode(',', $gallery_ids));
         }
     }
 

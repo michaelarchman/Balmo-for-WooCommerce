@@ -43,7 +43,7 @@ class MappingPage
         '_skip'             => '— Pomiń kolumnę —',
     ];
 
-    // Automatyczne mapowanie dla znanych kolumn drop.seltu.pl
+    // Automatyczne mapowanie dla CSV drop.seltu.pl
     public const AUTO_MAP = [
         'product_id'        => '_product_id_ext',
         'product_code'      => '_sku',
@@ -67,8 +67,32 @@ class MappingPage
         'images 5'          => '_gallery_image_5',
         'images 6'          => '_gallery_image_6',
         'images 7'          => '_gallery_image_7',
-        // ICA
-        'currency'          => '_skip',
+    ];
+
+    // Automatyczne mapowanie dla JSON drop.seltu.pl
+    public const AUTO_MAP_JSON = [
+        'product_id'         => '_product_id_ext',
+        'product_code'       => '_sku',
+        'active'             => 'post_status',
+        'name'               => 'post_title',
+        'price'              => '_regular_price',
+        'currency'           => '_skip',
+        'vat'                => 'tax_class',
+        'unit'               => '_unit',
+        'category'           => '_categories',
+        'producer'           => '_producer',
+        'weight'             => '_weight',
+        'ean'                => '_ean',
+        'short_description'  => 'post_excerpt',
+        'description'        => 'post_content',
+        'stock'              => '_stock',
+        'main_image'         => '_thumbnail',
+        'additional_image_1' => '_gallery_image_2',
+        'additional_image_2' => '_gallery_image_3',
+        'additional_image_3' => '_gallery_image_4',
+        'additional_image_4' => '_gallery_image_5',
+        'additional_image_5' => '_gallery_image_6',
+        'additional_image_6' => '_gallery_image_7',
     ];
 
     public static function init(): void
@@ -85,27 +109,51 @@ class MappingPage
             wp_die(esc_html__('Brak uprawnień.', 'balmo'));
         }
 
+        $action = sanitize_key($_GET['action'] ?? 'list');
+        $id     = (int) ($_GET['id'] ?? 0);
+
+        if ($action === 'edit' && $id) {
+            self::renderForm($id);
+        } elseif ($action === 'new') {
+            self::renderForm(0);
+        } else {
+            self::renderList();
+        }
+    }
+
+    private static function listUrl(): string
+    {
+        return admin_url('admin.php?page=balmo-mapping');
+    }
+
+    private static function renderList(): void
+    {
+        \Balmo\maybe_migrate_db();
+
         global $wpdb;
         $mappings = $wpdb->get_results(
             "SELECT * FROM " . \Balmo\table_mappings() . " ORDER BY name ASC"
         ) ?: [];
 
+        $new_url = admin_url('admin.php?page=balmo-mapping&action=new');
         ?>
         <div class="wrap">
-            <h1><?php esc_html_e('Profile mapowania', 'balmo'); ?></h1>
-            <p class="description">
-                <?php esc_html_e('Profil mapowania określa, które kolumny CSV trafiają do których pól WooCommerce. Możesz też nadpisać wartość całej kolumny (np. wpisując "23" w nadpisaniu dla "vat" wszystkie wartości zostaną zastąpione przez 23).', 'balmo'); ?>
-            </p>
+            <h1 class="wp-heading-inline"><?php esc_html_e('Profile mapowania', 'balmo'); ?></h1>
+            <a href="<?php echo esc_url($new_url); ?>" class="page-title-action">
+                <?php esc_html_e('Dodaj nowy', 'balmo'); ?>
+            </a>
+            <hr class="wp-header-end">
 
-            <!-- Lista zapisanych profili -->
-            <h2><?php esc_html_e('Zapisane profile', 'balmo'); ?></h2>
             <?php if (empty($mappings)): ?>
-                <p><?php esc_html_e('Brak zapisanych profili. Stwórz nowy poniżej lub podczas importu.', 'balmo'); ?></p>
+                <p><?php esc_html_e('Brak profili. ', 'balmo'); ?>
+                   <a href="<?php echo esc_url($new_url); ?>"><?php esc_html_e('Dodaj pierwszy profil.', 'balmo'); ?></a>
+                </p>
             <?php else: ?>
                 <table class="widefat striped">
                     <thead>
                         <tr>
                             <th><?php esc_html_e('Nazwa', 'balmo'); ?></th>
+                            <th><?php esc_html_e('Format', 'balmo'); ?></th>
                             <th><?php esc_html_e('Typ', 'balmo'); ?></th>
                             <th><?php esc_html_e('Dopasowanie', 'balmo'); ?></th>
                             <th><?php esc_html_e('Formuła cenowa', 'balmo'); ?></th>
@@ -114,9 +162,12 @@ class MappingPage
                         </tr>
                     </thead>
                     <tbody>
-                        <?php foreach ($mappings as $m): ?>
+                        <?php foreach ($mappings as $m):
+                            $edit_url = admin_url('admin.php?page=balmo-mapping&action=edit&id=' . (int) $m->id);
+                        ?>
                             <tr>
-                                <td><strong><?php echo esc_html($m->name); ?></strong></td>
+                                <td><a href="<?php echo esc_url($edit_url); ?>"><strong><?php echo esc_html($m->name); ?></strong></a></td>
+                                <td><?php echo esc_html(strtoupper($m->format ?? 'csv')); ?></td>
                                 <td><?php echo esc_html(strtoupper($m->source_type)); ?></td>
                                 <td><?php echo esc_html($m->match_by === 'sku' ? 'SKU' : 'ID'); ?></td>
                                 <td>
@@ -128,10 +179,9 @@ class MappingPage
                                 </td>
                                 <td><?php echo esc_html($m->updated_at); ?></td>
                                 <td>
-                                    <button type="button" class="button balmo-btn-edit-mapping"
-                                            data-id="<?php echo esc_attr($m->id); ?>">
+                                    <a href="<?php echo esc_url($edit_url); ?>" class="button">
                                         <?php esc_html_e('Edytuj', 'balmo'); ?>
-                                    </button>
+                                    </a>
                                     <button type="button" class="button balmo-btn-delete-mapping"
                                             data-id="<?php echo esc_attr($m->id); ?>"
                                             data-name="<?php echo esc_attr($m->name); ?>">
@@ -143,24 +193,71 @@ class MappingPage
                     </tbody>
                 </table>
             <?php endif; ?>
+        </div>
+        <?php
+    }
 
-            <hr>
+    private static function renderForm(int $id): void
+    {
+        \Balmo\maybe_migrate_db();
 
-            <!-- Formularz nowego/edytowanego profilu -->
-            <h2 id="balmo-mapping-form-title"><?php esc_html_e('Nowy profil mapowania', 'balmo'); ?></h2>
-            <input type="hidden" id="balmo-mapping-id" value="">
+        global $wpdb;
+
+        $m = null;
+        if ($id) {
+            $m = $wpdb->get_row($wpdb->prepare(
+                "SELECT * FROM " . \Balmo\table_mappings() . " WHERE id = %d", $id
+            ));
+            if (!$m) {
+                wp_die(esc_html__('Profil nie istnieje.', 'balmo'));
+            }
+        }
+
+        $name             = $m->name             ?? '';
+        $format           = $m->format           ?? 'csv';
+        $source_type      = $m->source_type      ?? 'all';
+        $match_by         = $m->match_by         ?? 'sku';
+        $price_formula    = $m->price_formula    ?? '';
+        $image_url_prefix = $m->image_url_prefix ?? '';
+        $column_map       = $m ? (json_decode($m->column_map,    true) ?: []) : [];
+        $overrides        = $m ? (json_decode($m->overrides,     true) ?: []) : [];
+        $update_fields    = $m ? (json_decode($m->update_fields, true) ?: ['_regular_price', '_stock', 'post_status']) : ['_regular_price', '_stock', 'post_status'];
+
+        $title    = $id ? sprintf(__('Edytujesz: %s', 'balmo'), $name) : __('Nowy profil mapowania', 'balmo');
+        $list_url = self::listUrl();
+        ?>
+        <div class="wrap">
+            <h1 class="wp-heading-inline"><?php echo esc_html($title); ?></h1>
+            <a href="<?php echo esc_url($list_url); ?>" class="page-title-action">
+                <?php esc_html_e('← Wróć do listy', 'balmo'); ?>
+            </a>
+            <hr class="wp-header-end">
+
+            <input type="hidden" id="balmo-mapping-id" value="<?php echo esc_attr($id ?: ''); ?>">
 
             <table class="form-table" role="presentation">
                 <tr>
                     <th><label for="balmo-mapping-name"><?php esc_html_e('Nazwa profilu', 'balmo'); ?></label></th>
-                    <td><input type="text" id="balmo-mapping-name" class="regular-text" placeholder="np. Colibra PL"></td>
+                    <td><input type="text" id="balmo-mapping-name" class="regular-text"
+                               value="<?php echo esc_attr($name); ?>"
+                               placeholder="<?php esc_attr_e('np. Colibra JSON', 'balmo'); ?>"></td>
+                </tr>
+                <tr>
+                    <th><label for="balmo-mapping-format"><?php esc_html_e('Format pliku', 'balmo'); ?></label></th>
+                    <td>
+                        <select id="balmo-mapping-format">
+                            <option value="csv" <?php selected($format, 'csv'); ?>><?php esc_html_e('CSV', 'balmo'); ?></option>
+                            <option value="json" <?php selected($format, 'json'); ?>><?php esc_html_e('JSON', 'balmo'); ?></option>
+                        </select>
+                        <p class="description"><?php esc_html_e('JSON zostanie automatycznie skonwertowany do CSV przed importem.', 'balmo'); ?></p>
+                    </td>
                 </tr>
                 <tr>
                     <th><label for="balmo-mapping-source-type"><?php esc_html_e('Typ pliku', 'balmo'); ?></label></th>
                     <td>
                         <select id="balmo-mapping-source-type">
-                            <option value="all"><?php esc_html_e('ALL — pełne dane', 'balmo'); ?></option>
-                            <option value="ica"><?php esc_html_e('ICA — cena/stan/aktywność', 'balmo'); ?></option>
+                            <option value="all" <?php selected($source_type, 'all'); ?>><?php esc_html_e('ALL — pełne dane', 'balmo'); ?></option>
+                            <option value="ica" <?php selected($source_type, 'ica'); ?>><?php esc_html_e('ICA — cena/stan/aktywność', 'balmo'); ?></option>
                         </select>
                     </td>
                 </tr>
@@ -168,22 +265,18 @@ class MappingPage
                     <th><label for="balmo-mapping-match-by"><?php esc_html_e('Dopasowanie produktów', 'balmo'); ?></label></th>
                     <td>
                         <select id="balmo-mapping-match-by">
-                            <option value="sku"><?php esc_html_e('Po SKU (product_code)', 'balmo'); ?></option>
-                            <option value="id"><?php esc_html_e('Po ID zewnętrznym (product_id)', 'balmo'); ?></option>
+                            <option value="sku" <?php selected($match_by, 'sku'); ?>><?php esc_html_e('Po SKU (product_code)', 'balmo'); ?></option>
+                            <option value="id"  <?php selected($match_by, 'id');  ?>><?php esc_html_e('Po ID zewnętrznym (product_id)', 'balmo'); ?></option>
                         </select>
                         <p class="description"><?php esc_html_e('Jak identyfikować istniejące produkty WooCommerce.', 'balmo'); ?></p>
                     </td>
                 </tr>
             </table>
 
-            <!-- Tabela mapowania kolumn (wypełniana przez JS po wczytaniu nagłówków) -->
             <h3><?php esc_html_e('Mapowanie kolumn', 'balmo'); ?></h3>
-            <p class="description">
-                <?php esc_html_e('Wczytaj najpierw plik CSV na stronie Import, aby zobaczyć kolumny. Lub wpisz nazwy kolumn ręcznie.', 'balmo'); ?>
-            </p>
             <p>
                 <button type="button" id="balmo-btn-automap" class="button">
-                    <?php esc_html_e('Auto-mapuj kolumny drop.seltu.pl', 'balmo'); ?>
+                    <?php esc_html_e('Auto-mapuj (drop.seltu.pl)', 'balmo'); ?>
                 </button>
                 <button type="button" id="balmo-btn-add-column" class="button">
                     <?php esc_html_e('+ Dodaj wiersz', 'balmo'); ?>
@@ -192,55 +285,76 @@ class MappingPage
             <table class="widefat" id="balmo-column-map-table">
                 <thead>
                     <tr>
-                        <th><?php esc_html_e('Kolumna CSV', 'balmo'); ?></th>
+                        <th><?php esc_html_e('Kolumna CSV/JSON', 'balmo'); ?></th>
                         <th><?php esc_html_e('→ Pole WooCommerce', 'balmo'); ?></th>
                         <th><?php esc_html_e('Nadpisanie (opcjonalne)', 'balmo'); ?></th>
                         <th><?php esc_html_e('Usuń', 'balmo'); ?></th>
                     </tr>
                 </thead>
-                <tbody id="balmo-column-map-body">
-                    <!-- wiersze generowane przez JS -->
-                </tbody>
+                <tbody id="balmo-column-map-body"></tbody>
             </table>
 
-            <!-- Formuła cenowa -->
             <h3><?php esc_html_e('Formuła cenowa', 'balmo'); ?></h3>
             <p class="description">
-                <?php esc_html_e('Wyrażenie matematyczne przeliczające cenę z CSV. Dostępne zmienne: {price}, {vat}. Funkcje: round(x,d), ceil(x), floor(x). Przykłady:', 'balmo'); ?>
-                <br>
-                <code>{price} * 1.23</code> &nbsp;|&nbsp;
-                <code>ceil({price} * 1.2)</code> &nbsp;|&nbsp;
-                <code>floor({price} * 1.2 / 0.1) * 0.1 + 0.99</code>
+                <?php esc_html_e('Zmienne: {price}, {vat}. Funkcje: round(x,d), ceil(x), floor(x).', 'balmo'); ?>
+                &nbsp; <code>{price} * 1.23</code> &nbsp;|&nbsp; <code>ceil({price} * 1.2)</code>
             </p>
             <input type="text" id="balmo-price-formula" class="large-text"
+                   value="<?php echo esc_attr($price_formula); ?>"
                    placeholder="<?php esc_attr_e('np. ceil({price} * 1.23)', 'balmo'); ?>">
             <p>
                 <button type="button" id="balmo-btn-preview-formula" class="button">
-                    <?php esc_html_e('Podgląd formuły (testowa cena: 64.58)', 'balmo'); ?>
+                    <?php esc_html_e('Podgląd (testowa cena: 64.58)', 'balmo'); ?>
                 </button>
                 <span id="balmo-formula-preview"></span>
             </p>
 
-            <!-- Pola do aktualizacji (dla trybu ICA/update) -->
-            <h3><?php esc_html_e('Pola do aktualizacji', 'balmo'); ?></h3>
+            <h3><?php esc_html_e('Prefix URL zdjęć', 'balmo'); ?></h3>
             <p class="description">
-                <?php esc_html_e('Które pola nadpisywać przy imporcie aktualizacyjnym (ICA lub pełny w trybie "tylko aktualizuj").', 'balmo'); ?>
+                <?php esc_html_e('Dodawany do relatywnych ścieżek zdjęć. Zostaw puste jeśli JSON zawiera pełne URLe.', 'balmo'); ?>
+                &nbsp; <code>https://drop.seltu.pl</code>
             </p>
-            <label><input type="checkbox" name="balmo_update_fields[]" value="_regular_price" checked> <?php esc_html_e('Cena', 'balmo'); ?></label><br>
-            <label><input type="checkbox" name="balmo_update_fields[]" value="_stock" checked> <?php esc_html_e('Stan magazynowy', 'balmo'); ?></label><br>
-            <label><input type="checkbox" name="balmo_update_fields[]" value="post_status" checked> <?php esc_html_e('Aktywność (publish/draft)', 'balmo'); ?></label><br>
-            <label><input type="checkbox" name="balmo_update_fields[]" value="post_title"> <?php esc_html_e('Nazwa produktu', 'balmo'); ?></label><br>
-            <label><input type="checkbox" name="balmo_update_fields[]" value="post_content"> <?php esc_html_e('Opis', 'balmo'); ?></label><br>
-            <label><input type="checkbox" name="balmo_update_fields[]" value="_weight"> <?php esc_html_e('Waga', 'balmo'); ?></label><br>
+            <input type="text" id="balmo-image-url-prefix" name="balmo-image-url-prefix" class="large-text"
+                   value="<?php echo esc_attr($image_url_prefix); ?>"
+                   placeholder="https://drop.seltu.pl">
+
+            <h3><?php esc_html_e('Pola do aktualizacji', 'balmo'); ?></h3>
+            <p class="description"><?php esc_html_e('Które pola nadpisywać przy imporcie aktualizacyjnym (ICA / tryb "tylko aktualizuj").', 'balmo'); ?></p>
+            <?php
+            $all_update_fields = [
+                '_regular_price' => __('Cena', 'balmo'),
+                '_stock'         => __('Stan magazynowy', 'balmo'),
+                'post_status'    => __('Aktywność (publish/draft)', 'balmo'),
+                'post_title'     => __('Nazwa produktu', 'balmo'),
+                'post_content'   => __('Opis', 'balmo'),
+                '_weight'        => __('Waga', 'balmo'),
+            ];
+            foreach ($all_update_fields as $val => $label):
+                $checked = in_array($val, $update_fields, true) ? 'checked' : '';
+            ?>
+            <label><input type="checkbox" name="balmo_update_fields[]" value="<?php echo esc_attr($val); ?>" <?php echo $checked; ?>> <?php echo esc_html($label); ?></label><br>
+            <?php endforeach; ?>
 
             <p style="margin-top:20px;">
                 <button type="button" id="balmo-btn-save-mapping" class="button button-primary">
                     <?php esc_html_e('Zapisz profil', 'balmo'); ?>
                 </button>
+                <a href="<?php echo esc_url($list_url); ?>" class="button" style="margin-left:8px;">
+                    <?php esc_html_e('Anuluj', 'balmo'); ?>
+                </a>
                 <span id="balmo-mapping-save-result" style="margin-left:10px;"></span>
             </p>
 
         </div><!-- .wrap -->
+
+        <?php if ($id): ?>
+        <script>
+        window.balmoEditMapping = {
+            column_map: <?php echo wp_json_encode($column_map); ?>,
+            overrides:  <?php echo wp_json_encode($overrides); ?>
+        };
+        </script>
+        <?php endif; ?>
 
         <!-- Szablon wiersza mapowania (ukryty) -->
         <script type="text/html" id="balmo-column-row-tpl">
@@ -259,9 +373,10 @@ class MappingPage
         </script>
 
         <script>
-        // Dane dla JS: auto-mapa i WC fields
-        window.balmoAutoMap   = <?php echo json_encode(self::AUTO_MAP); ?>;
-        window.balmoWcFields  = <?php echo json_encode(array_keys(self::WC_FIELDS)); ?>;
+        // Dane dla JS: auto-mapy i WC fields
+        window.balmoAutoMap     = <?php echo wp_json_encode(self::AUTO_MAP); ?>;
+        window.balmoAutoMapJson = <?php echo wp_json_encode(self::AUTO_MAP_JSON); ?>;
+        window.balmoWcFields    = <?php echo wp_json_encode(array_keys(self::WC_FIELDS)); ?>;
         </script>
         <?php
     }
@@ -271,16 +386,20 @@ class MappingPage
         check_ajax_referer('balmo_ajax', 'nonce');
         if (!current_user_can('manage_woocommerce')) wp_send_json_error('Brak uprawnień.');
 
+        \Balmo\maybe_migrate_db();
+
         global $wpdb;
 
-        $id           = (int) ($_POST['id'] ?? 0);
-        $name         = sanitize_text_field($_POST['name']         ?? '');
-        $source_type  = sanitize_text_field($_POST['source_type']  ?? 'all');
-        $match_by     = sanitize_text_field($_POST['match_by']     ?? 'sku');
-        $price_formula = sanitize_text_field($_POST['price_formula'] ?? '');
-        $column_map   = $_POST['column_map']   ?? [];
-        $overrides    = $_POST['overrides']    ?? [];
-        $update_fields = $_POST['update_fields'] ?? [];
+        $id               = (int) ($_POST['id'] ?? 0);
+        $name             = sanitize_text_field($_POST['name']             ?? '');
+        $format           = sanitize_text_field($_POST['format']           ?? 'csv');
+        $source_type      = sanitize_text_field($_POST['source_type']      ?? 'all');
+        $match_by         = sanitize_text_field($_POST['match_by']         ?? 'sku');
+        $price_formula    = sanitize_text_field($_POST['price_formula']    ?? '');
+        $image_url_prefix = self::sanitizeImageUrlPrefix($_POST['image_url_prefix'] ?? '');
+        $column_map       = $_POST['column_map']   ?? [];
+        $overrides        = $_POST['overrides']    ?? [];
+        $update_fields    = $_POST['update_fields'] ?? [];
 
         if (empty($name)) {
             wp_send_json_error(__('Podaj nazwę profilu.', 'balmo'));
@@ -293,22 +412,55 @@ class MappingPage
         $update_fields = array_map('sanitize_text_field', (array) $update_fields);
 
         $data = [
-            'name'          => $name,
-            'source_type'   => in_array($source_type, ['all', 'ica'], true) ? $source_type : 'all',
-            'match_by'      => in_array($match_by, ['sku', 'id'], true) ? $match_by : 'sku',
-            'price_formula' => $price_formula,
-            'column_map'    => wp_json_encode($column_map),
-            'overrides'     => wp_json_encode($overrides),
-            'update_fields' => wp_json_encode($update_fields),
+            'name'             => $name,
+            'format'           => in_array($format, ['csv', 'json'], true) ? $format : 'csv',
+            'source_type'      => in_array($source_type, ['all', 'ica'], true) ? $source_type : 'all',
+            'match_by'         => in_array($match_by, ['sku', 'id'], true) ? $match_by : 'sku',
+            'price_formula'    => $price_formula,
+            'image_url_prefix' => $image_url_prefix,
+            'column_map'       => wp_json_encode($column_map),
+            'overrides'        => wp_json_encode($overrides),
+            'update_fields'    => wp_json_encode($update_fields),
         ];
 
+        $formats = array_fill(0, count($data), '%s');
+
         if ($id > 0) {
-            $wpdb->update(\Balmo\table_mappings(), $data, ['id' => $id], array_fill(0, count($data), '%s'), ['%d']);
-            wp_send_json_success(['id' => $id, 'message' => __('Profil zaktualizowany.', 'balmo')]);
+            $updated = $wpdb->update(\Balmo\table_mappings(), $data, ['id' => $id], $formats, ['%d']);
+            if ($updated === false) {
+                wp_send_json_error(__('Błąd bazy danych: ', 'balmo') . $wpdb->last_error);
+                return;
+            }
+            wp_send_json_success([
+                'id'      => $id,
+                'message' => __('Profil zaktualizowany.', 'balmo'),
+            ]);
         } else {
-            $wpdb->insert(\Balmo\table_mappings(), $data, array_fill(0, count($data), '%s'));
-            wp_send_json_success(['id' => (int) $wpdb->insert_id, 'message' => __('Profil zapisany.', 'balmo')]);
+            $inserted = $wpdb->insert(\Balmo\table_mappings(), $data, $formats);
+            $new_id = (int) $wpdb->insert_id;
+            if (!$inserted) {
+                wp_send_json_error(__('Błąd bazy danych: ', 'balmo') . $wpdb->last_error);
+                return;
+            }
+            wp_send_json_success([
+                'id'      => $new_id,
+                'message' => __('Profil zapisany.', 'balmo'),
+            ]);
         }
+    }
+
+    private static function sanitizeImageUrlPrefix($value): string
+    {
+        $value = trim((string) $value);
+        if ($value === '') {
+            return '';
+        }
+
+        if (!preg_match('#^https?://#i', $value)) {
+            $value = 'https://' . ltrim($value, '/');
+        }
+
+        return untrailingslashit(esc_url_raw($value));
     }
 
     public static function ajaxDeleteMapping(): void
@@ -340,14 +492,16 @@ class MappingPage
         if (!$m) wp_send_json_error(__('Profil nie istnieje.', 'balmo'));
 
         wp_send_json_success([
-            'id'            => (int) $m->id,
-            'name'          => $m->name,
-            'source_type'   => $m->source_type,
-            'match_by'      => $m->match_by,
-            'price_formula' => $m->price_formula,
-            'column_map'    => json_decode($m->column_map, true) ?: [],
-            'overrides'     => json_decode($m->overrides,  true) ?: [],
-            'update_fields' => json_decode($m->update_fields, true) ?: [],
+            'id'               => (int) $m->id,
+            'name'             => $m->name,
+            'format'           => $m->format ?? 'csv',
+            'source_type'      => $m->source_type,
+            'match_by'         => $m->match_by,
+            'price_formula'    => $m->price_formula,
+            'image_url_prefix' => $m->image_url_prefix ?? '',
+            'column_map'       => json_decode($m->column_map, true) ?: [],
+            'overrides'        => json_decode($m->overrides,  true) ?: [],
+            'update_fields'    => json_decode($m->update_fields, true) ?: [],
         ]);
     }
 
