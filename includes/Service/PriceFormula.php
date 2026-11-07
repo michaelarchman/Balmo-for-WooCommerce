@@ -5,18 +5,18 @@ namespace Balmo\Service;
 if (!defined('ABSPATH')) exit;
 
 /**
- * Bezpieczny ewaluator formuł cenowych.
- * NIE używa eval(). Parsuje wyrażenie do tokenów i oblicza je ręcznie.
+ * Safe evaluator for price formulas.
+ * Does NOT use eval(). Parses the expression into tokens and evaluates them manually.
  *
- * Obsługiwane elementy:
- *   - Zmienne:  {price}, {vat}
- *   - Operatory: + - * / ( )
- *   - Funkcje:   round(x), round(x,d), ceil(x), floor(x), abs(x), min(x,y), max(x,y)
- *   - Liczby:    całkowite i zmiennoprzecinkowe
+ * Supported elements:
+ *   - Variables:  {price}, {vat}
+ *   - Operators: + - * / ( )
+ *   - Functions:   round(x), round(x,d), ceil(x), floor(x), abs(x), min(x,y), max(x,y)
+ *   - Numbers:    integers and floats
  */
 class PriceFormula
 {
-    // Dostępne funkcje i ich PHP-odpowiedniki
+    // Available functions and their PHP equivalents
     private const FUNCTIONS = ['round', 'ceil', 'floor', 'abs', 'min', 'max'];
 
     public static function evaluate(string $formula, float $price, float $vat = 23.0): float|\WP_Error
@@ -28,8 +28,8 @@ class PriceFormula
         // Podstaw zmienne
         $expr = str_replace(['{price}', '{vat}'], [$price, $vat], $formula);
 
-        // Zamień przecinki w zapisie liczb na kropki (ale nie przecinki w argumentach funkcji)
-        // Bezpieczne: tokenizuj
+        // Replace decimal commas with dots (but not argument commas in functions)
+        // Safe: tokenize
         try {
             $tokens = self::tokenize($expr);
             $result = self::parseExpression($tokens);
@@ -44,10 +44,10 @@ class PriceFormula
             return new \WP_Error('formula_error', __('Formuła zwróciła nieskończoność lub NaN.', 'balmo'));
         }
 
-        return round($result, 10); // zachowaj precyzję, WC sam zaokrągli
+        return round($result, 10); // keep precision, WC rounds on its own
     }
 
-    // Tokenizacja wyrażenia
+    // Tokenize the expression
     private static function tokenize(string $expr): array
     {
         $tokens = [];
@@ -57,13 +57,13 @@ class PriceFormula
         while ($i < $len) {
             $ch = $expr[$i];
 
-            // Białe znaki — pomiń
+            // Whitespace: skip
             if (ctype_space($ch)) {
                 $i++;
                 continue;
             }
 
-            // Liczba (z opcjonalnym minusem jako unary)
+            // Number (with optional minus as unary)
             if (ctype_digit($ch) || $ch === '.') {
                 $num = '';
                 while ($i < $len && (ctype_digit($expr[$i]) || $expr[$i] === '.')) {
@@ -73,7 +73,7 @@ class PriceFormula
                 continue;
             }
 
-            // Identyfikator (funkcja lub zmienna)
+            // Identifier (function or variable)
             if (ctype_alpha($ch) || $ch === '_') {
                 $name = '';
                 while ($i < $len && (ctype_alnum($expr[$i]) || $expr[$i] === '_')) {
@@ -87,7 +87,7 @@ class PriceFormula
                 continue;
             }
 
-            // Operatory i nawiasy
+            // Operators and parentheses
             if (in_array($ch, ['+', '-', '*', '/', '(', ')', ','], true)) {
                 $tokens[] = ['type' => 'op', 'value' => $ch];
                 $i++;
@@ -100,11 +100,11 @@ class PriceFormula
         return $tokens;
     }
 
-    // Parser wyrażenia — Shunting-Yard + obliczenia
+    // Expression parser: Shunting-Yard + evaluation
     private static function parseExpression(array $tokens): float
     {
-        $output   = []; // stos wartości
-        $ops      = []; // stos operatorów
+        $output   = []; // value stack
+        $ops      = []; // operator stack
         $precedence = ['+' => 1, '-' => 1, '*' => 2, '/' => 2];
 
         $apply = function (string $op) use (&$output): void {
@@ -125,7 +125,7 @@ class PriceFormula
         $i   = 0;
         $cnt = count($tokens);
 
-        // Obsługa unary minus: poprzedza liczbę po operatorze lub na początku
+        // Unary minus: precedes a number after an operator or at the start
         $prev_type = null;
 
         while ($i < $cnt) {
@@ -146,7 +146,7 @@ class PriceFormula
 
                 // Unary minus
                 if ($ch === '-' && ($prev_type === null || $prev_type === 'op' && in_array($tokens[$i-1]['value'], ['(', ','], true) || $prev_type === 'op')) {
-                    // Kolejny token powinien być liczbą
+                    // Next token should be a number
                     if (isset($tokens[$i+1]) && $tokens[$i+1]['type'] === 'number') {
                         $output[] = -$tokens[$i+1]['value'];
                         $i += 2;
@@ -167,8 +167,8 @@ class PriceFormula
                     if (empty($ops)) {
                         throw new \InvalidArgumentException('Niezrównoważone nawiasy.');
                     }
-                    array_pop($ops); // usuń '('
-                    // Jeśli na szczycie stosu jest funkcja — wywołaj ją
+                    array_pop($ops); // remove '('
+                    // If a function is on top of the stack, call it
                     if (!empty($ops) && end($ops)['type'] === 'function') {
                         $fn   = array_pop($ops)['value'];
                         $args = self::popFunctionArgs($output, $fn);
@@ -220,10 +220,10 @@ class PriceFormula
 
     private static function popFunctionArgs(array &$stack, string $fn): array
     {
-        // Funkcje 1-argumentowe: ceil, floor, round (bez d), abs
-        // Funkcje 2-argumentowe: round(x,d), min(x,y), max(x,y)
+        // 1-argument functions: ceil, floor, round (without d), abs
+        // 2-argument functions: round(x,d), min(x,y), max(x,y)
         $two_arg = ['min', 'max'];
-        $opt_two = ['round']; // round może mieć 1 lub 2 argumenty
+        $opt_two = ['round']; // round may take 1 or 2 arguments
 
         if (in_array($fn, $two_arg, true)) {
             if (count($stack) < 2) throw new \InvalidArgumentException("Funkcja {$fn} wymaga 2 argumentów.");
@@ -233,7 +233,7 @@ class PriceFormula
         }
 
         if (in_array($fn, $opt_two, true) && count($stack) >= 2) {
-            // Sprawdź czy drugi argument jest całkowity (miejsca dziesiętne)
+            // Check whether the second argument is an integer (decimal places)
             $b = end($stack);
             if (is_float($b) && $b == (int) $b && $b >= 0 && $b <= 10) {
                 array_pop($stack);

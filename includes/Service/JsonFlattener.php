@@ -5,16 +5,16 @@ namespace Balmo\Service;
 if (!defined('ABSPATH')) exit;
 
 /**
- * Pobiera plik JSON Colibra i konwertuje go do CSV gotowego do importu.
- * Obsługuje struktury: [{...}] lub {"products":[{...}]}
- * Spłaszczanie pojedynczego produktu robi FeedRowFlattener (wspólny z XmlFlattener).
+ * Fetches a Colibra JSON file and converts it to CSV ready for import.
+ * Supports structures: [{...}] or {"products":[{...}]}
+ * Flattening a single product is done by FeedRowFlattener (shared with XmlFlattener).
  */
 class JsonFlattener
 {
     private const MAX_FILE_SIZE  = 104857600; // 100 MB
     private const PREVIEW_ROWS   = 10;
 
-    // Pobierz JSON z URL i zapisz jako CSV
+    // Fetch JSON from URL and save as CSV
     public static function fromUrl(string $url, string $source_type): array|\WP_Error
     {
         $json_path = self::tempPath('json');
@@ -55,7 +55,7 @@ class JsonFlattener
         return $result;
     }
 
-    // Prześlij JSON i zapisz jako CSV
+    // Upload JSON and save as CSV
     public static function fromUpload(array $file, string $source_type): array|\WP_Error
     {
         if (empty($file['tmp_name']) || !is_uploaded_file($file['tmp_name'])) {
@@ -78,7 +78,7 @@ class JsonFlattener
         return $result;
     }
 
-    // Konwertuj JSON → CSV, zwróć dane kompatybilne z CsvFetcher
+    // Convert JSON to CSV, return data compatible with CsvFetcher
     public static function convertToCsv(string $json_path, string $csv_path, string $source_type, string $source_url): array|\WP_Error
     {
         $raw = @file_get_contents($json_path);
@@ -103,7 +103,7 @@ class JsonFlattener
             return new \WP_Error('json_empty', __('Plik JSON nie zawiera produktów.', 'balmo'));
         }
 
-        // Zbierz nagłówki (na próbce pierwszych 50 produktów)
+        // Collect headers (sample of the first 50 products)
         $headers = self::collectHeaders(array_slice($products, 0, 50));
 
         $handle = fopen($csv_path, 'w');
@@ -156,28 +156,28 @@ class JsonFlattener
         ];
     }
 
-    // Wyciągnij tablicę produktów z różnych struktur JSON Colibra
+    // Extract the product array from the various Colibra JSON structures
     private static function extractProducts(array $data): array
     {
-        // Bezpośrednia tablica [{...}, ...]
+        // Direct array [{...}, ...]
         if (isset($data[0]) && is_array($data[0])) {
             return $data;
         }
 
-        // Obiekt z kluczem products/product/items/data
+        // Object with products/product/items/data key
         foreach (['products', 'product', 'items', 'data'] as $key) {
             if (!isset($data[$key]) || !is_array($data[$key])) continue;
             $val = $data[$key];
-            if (!isset($val[0])) return [$val]; // pojedynczy produkt
+            if (!isset($val[0])) return [$val]; // single product
             return $val;
         }
 
-        // Pojedynczy produkt jako root
+        // Single product as root
         if (isset($data['product_id']) || isset($data['product_code'])) {
             return [$data];
         }
 
-        // Obiekt z ID jako kluczami: {"425": {...}, "426": {...}} — format Colibra JSON
+        // Object with IDs as keys: {"425": {...}, "426": {...}}, Colibra JSON format
         $first = reset($data);
         if (is_array($first) && (isset($first['product_id']) || isset($first['product_code']) || isset($first['name']))) {
             return array_values($data);
@@ -186,7 +186,7 @@ class JsonFlattener
         return [];
     }
 
-    // Zbierz unikalne klucze z próbki produktów
+    // Collect unique keys from the product sample
     private static function collectHeaders(array $products): array
     {
         $headers = [];

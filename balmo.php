@@ -1,7 +1,7 @@
 <?php
 /**
  * Plugin Name: Balmo for WooCommerce
- * Description: Import produktów CSV z mapowaniem kolumn, formułami cenowymi i harmonogramem. Obsługa do 20 000 produktów w transzach.
+ * Description: Import products from CSV, JSON and XML feeds with column mapping, price formulas and scheduling. Handles up to 20,000 products in batches.
  * Version:     1.1.0
  * Author:      Michał Łuczak
  * Requires at least: 5.0
@@ -73,7 +73,7 @@ define('BALMO_PLUGIN_FILE', __FILE__);
 define('BALMO_PLUGIN_DIR',  plugin_dir_path(__FILE__));
 define('BALMO_PLUGIN_URL',  plugin_dir_url(__FILE__));
 
-// Rozmiar pojedynczej transzy przy imporcie (wiersze CSV)
+// Rows per import batch (CSV rows)
 define('BALMO_BATCH_SIZE', 200);
 define('BALMO_ASYNC_BATCH_SIZE', 10);
 define('BALMO_BATCH_TIME_LIMIT', 20);
@@ -86,7 +86,7 @@ spl_autoload_register(function (string $class): void {
     if (file_exists($file)) require_once $file;
 });
 
-// --- Tabele bazy danych ---
+// --- Database tables ---
 
 function table_import_log(): string
 {
@@ -112,7 +112,7 @@ function activate(): void
     require_once ABSPATH . 'wp-admin/includes/upgrade.php';
     $charset = $wpdb->get_charset_collate();
 
-    // Historia importów — jeden rekord na każde uruchomienie
+    // Import history, one record per run
     dbDelta("
         CREATE TABLE " . table_import_log() . " (
             id             BIGINT UNSIGNED  NOT NULL AUTO_INCREMENT,
@@ -142,7 +142,7 @@ function activate(): void
         ) {$charset};
     ");
 
-    // Błędy per wiersz CSV — szczegółowy log
+    // Per-row CSV errors, detailed log
     dbDelta("
         CREATE TABLE " . table_import_errors() . " (
             id            BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -156,7 +156,7 @@ function activate(): void
         ) {$charset};
     ");
 
-    // Profile mapowania kolumn
+    // Column mapping profiles
     dbDelta("
         CREATE TABLE " . table_mappings() . " (
             id            BIGINT UNSIGNED  NOT NULL AUTO_INCREMENT,
@@ -175,7 +175,7 @@ function activate(): void
         ) {$charset};
     ");
 
-    // Folder na tymczasowe pliki CSV
+    // Folder for temporary CSV files
     $upload_dir = wp_upload_dir();
     $balmo_dir  = $upload_dir['basedir'] . '/balmo';
     if (!file_exists($balmo_dir)) {
@@ -183,7 +183,7 @@ function activate(): void
         file_put_contents($balmo_dir . '/.htaccess', 'deny from all');
     }
 
-    // Domyślne ustawienia
+    // Default settings
     add_option('balmo_batch_size',       200);
     add_option('balmo_image_mode',       'none');
     add_option('balmo_default_status',   'publish');
@@ -199,9 +199,9 @@ function deactivate(): void
 register_deactivation_hook(BALMO_PLUGIN_FILE, __NAMESPACE__ . '\deactivate');
 
 /**
- * Migracja schematu DB — dodaje brakujące kolumny do istniejących tabel.
- * Uruchamiana przy każdym plugins_loaded jeśli wersja DB jest stara.
- * Bezpieczniejsza niż dbDelta przy UPDATE kolumn.
+ * DB schema migration: adds missing columns to existing tables.
+ * Runs on every plugins_loaded when the DB version is outdated.
+ * Safer than dbDelta for column updates.
  */
 function maybe_migrate_db(): void
 {
@@ -298,12 +298,12 @@ function clear_offset_attempts(int $import_id, int $offset): void
     delete_transient(attempt_key($import_id, $offset));
 }
 
-// --- Inicjalizacja ---
+// --- Initialization ---
 
 /**
- * Action Scheduler: przetwórz jedną transzę importu.
- * Każda akcja obsługuje BALMO_BATCH_SIZE wierszy, po czym kolejkuje następną.
- * Rejestrujemy poza is_admin() — AS odpala poza kontekstem admina.
+ * Action Scheduler: process one import batch.
+ * Each action handles BALMO_BATCH_SIZE rows, then queues the next one.
+ * Registered outside is_admin(): AS runs outside the admin context.
  */
 add_action('balmo_as_batch', function (int $import_id, int $offset): void {
     global $wpdb;
@@ -370,7 +370,7 @@ add_action('balmo_as_batch', function (int $import_id, int $offset): void {
     $file_path = $log->file_path ?? '';
     $delimiter = $log->delimiter ?? ',';
 
-    // Pierwsze wywołanie — ustaw status running
+    // First call: set status to running
     if ($log->status === 'pending') {
         if (empty($file_path) || !file_exists($file_path)) {
             $wpdb->update(table_import_log(),
@@ -387,7 +387,6 @@ add_action('balmo_as_batch', function (int $import_id, int $offset): void {
         $log->status = 'running';
     }
 
-    // Pobierz profil mapowania
     $mapping = null;
     if ($log->mapping_id) {
         $mapping = $wpdb->get_row($wpdb->prepare(
@@ -397,13 +396,13 @@ add_action('balmo_as_batch', function (int $import_id, int $offset): void {
 
     $batch_size  = get_background_batch_size();
 
-    // Zarządzanie pamięcią przed batchem
+    // Memory management before the batch
     @ini_set('memory_limit', '512M');
     wp_defer_term_counting(true);
     wp_defer_comment_counting(true);
     wp_suspend_cache_addition(true);
 
-    // Wyłącz Jetpack sync — synchronizuje każdy produkt i zjada RAM
+    // Disable Jetpack sync: it syncs every product and eats RAM
     if (class_exists('Automattic\Jetpack\Sync\Actions')) {
         \Automattic\Jetpack\Sync\Actions::mark_sync_read_only();
     }
@@ -476,21 +475,21 @@ add_action('balmo_as_batch', function (int $import_id, int $offset): void {
         return;
     }
 
-    // Wyczyść pamięć przed kolejnym batchem
+    // Free memory before the next batch
     wp_defer_term_counting(false);
     wp_defer_comment_counting(false);
     wp_suspend_cache_addition(false);
     wp_cache_flush();
     gc_collect_cycles();
 
-    // Kolejkuj następną transzę z opóźnieniem — wymusza nowy proces PHP
+    // Queue next batch with a delay, forces a new PHP process
     mark_import_heartbeat($import_id, $next_offset);
     as_schedule_single_action(time() + 2, 'balmo_as_batch', [$import_id, $next_offset], 'balmo');
 
 }, 10, 2);
 
-// --- Filtry dla zewnętrznych załączników Balmo ---
-// Muszą działać zawsze (frontend + admin), dlatego poza is_admin().
+// --- Filters for external Balmo attachments ---
+// Must always run (frontend + admin), hence outside is_admin().
 
 add_filter('wp_get_attachment_url', function ($url, $attachment_id) {
     $attachment_id = (int) $attachment_id;

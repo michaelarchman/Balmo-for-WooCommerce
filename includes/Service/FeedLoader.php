@@ -5,16 +5,16 @@ namespace Balmo\Service;
 if (!defined('ABSPATH')) exit;
 
 /**
- * Jedyne miejsce wyboru parsera pliku źródłowego.
- * Format pochodzi z profilu mapowania; bez profilu zawsze CSV.
- * Wynik ma kontrakt CsvFetcher: file_path, delimiter, source_type, source_url, columns, total_rows, preview.
+ * The only place that selects the source file parser.
+ * The format comes from the mapping profile; without a profile it is always CSV.
+ * The result follows the CsvFetcher contract: file_path, delimiter, source_type, source_url, columns, total_rows, preview.
  */
 class FeedLoader
 {
     public const FORMATS = ['csv', 'json', 'xml'];
 
     /**
-     * Pobierz plik z URL i przygotuj CSV do importu.
+     * Fetch a file from URL and prepare CSV for import.
      *
      * @return array|\WP_Error
      */
@@ -31,7 +31,7 @@ class FeedLoader
     }
 
     /**
-     * Przyjmij przesłany plik i przygotuj CSV do importu.
+     * Accept an uploaded file and prepare CSV for import.
      *
      * @return array|\WP_Error
      */
@@ -47,7 +47,7 @@ class FeedLoader
         return CsvFetcher::fromUpload($file, $source_type);
     }
 
-    // Format pochodzi wyłącznie z wybranego profilu mapowania
+    // Format comes only from the selected mapping profile
     public static function formatForMapping(int $mapping_id): string
     {
         if (!$mapping_id) return 'csv';

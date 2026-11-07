@@ -1,7 +1,7 @@
 /**
  * Balmo for WooCommerce — Admin JS
- * Obsługuje: Import CSV (pobieranie, walidacja, transzowanie),
- *            Mapowanie kolumn, Harmonogram, Historia.
+ * Handles: CSV import (fetch, validation, batching),
+ *            Column mapping, Schedule, History.
  */
 jQuery(function ($) {
     'use strict';
@@ -10,7 +10,7 @@ jQuery(function ($) {
     var nonce   = balmoAjax.nonce;
 
     // =========================================================
-    // STRONA: IMPORT CSV
+    // PAGE: CSV IMPORT
     // =========================================================
 
     var importState = {
@@ -27,7 +27,7 @@ jQuery(function ($) {
         errors:     0
     };
 
-    // --- Krok 1: Pobierz i zwaliduj plik ---
+    // --- Step 1: fetch and validate file ---
 
     $('#balmo-btn-fetch').on('click', function () {
         var url        = $('#balmo_csv_url').val().trim();
@@ -85,7 +85,7 @@ jQuery(function ($) {
                 $('#balmo-step-2').show();
                 $('#balmo-step-2-actions').show();
 
-                // Pokaż przycisk bezpośredniego importu jeśli jest profil
+                // Show direct import button if a profile is selected
                 if (importState.mappingId > 0) {
                     $('#balmo-btn-start-import').show();
                 } else {
@@ -148,14 +148,14 @@ jQuery(function ($) {
         $('#balmo-preview-wrap').html(html);
     }
 
-    // --- Przejdź do mapowania ---
+    // --- Go to mapping ---
     $('#balmo-btn-to-mapping').on('click', function () {
-        // Przekieruj do strony mapowania z parametrami w sessionStorage
+        // Redirect to the mapping page; state passed via sessionStorage
         sessionStorage.setItem('balmo_import_state', JSON.stringify(importState));
         window.location.href = 'admin.php?page=balmo-mapping&from_import=1';
     });
 
-    // --- Krok 2: Uruchom import ---
+    // --- Step 2: start import ---
     $('#balmo-btn-start-import').on('click', function () {
         if (!importState.filePath) { alert('Brak pliku.'); return; }
         if (!importState.mappingId) { alert('Wybierz profil mapowania.'); return; }
@@ -188,7 +188,7 @@ jQuery(function ($) {
             $('#balmo-prog-total').text(importState.totalRows);
             $('#balmo-prog-status').text('Oczekuje na Action Scheduler…');
 
-            // Import działa w tle (Action Scheduler) — polluj status co 3s
+            // Import runs in the background (Action Scheduler): poll status every 3 s
             startPolling();
         });
     }
@@ -198,7 +198,7 @@ jQuery(function ($) {
     function startPolling() {
         if (pollTimer) clearInterval(pollTimer);
         pollTimer = setInterval(pollStatus, 3000);
-        pollStatus(); // od razu pierwsze odpytanie
+        pollStatus(); // poll right away
     }
 
     function pollStatus() {
@@ -256,7 +256,7 @@ jQuery(function ($) {
     }
 
     // =========================================================
-    // STRONA: MAPOWANIE KOLUMN
+    // PAGE: COLUMN MAPPING
     // =========================================================
 
     var $mapBody = $('#balmo-column-map-body');
@@ -275,7 +275,7 @@ jQuery(function ($) {
         $mapBody.append($row);
     }
 
-    // Auto-mapuj kolumny drop.seltu.pl (CSV, JSON lub XML w zależności od wybranego formatu)
+    // Auto-map drop.seltu.pl columns (CSV, JSON or XML, depending on the selected format)
     $('#balmo-btn-automap').on('click', function () {
         if ($mapBody.find('tr').length > 0) {
             if (!confirm('Zastąpić istniejące mapowanie auto-mapą?')) return;
@@ -288,17 +288,14 @@ jQuery(function ($) {
         });
     });
 
-    // Dodaj wiersz ręcznie
     $('#balmo-btn-add-column').on('click', function () {
         addMappingRow('', '', '');
     });
 
-    // Usuń wiersz
     $mapBody.on('click', '.balmo-btn-remove-row', function () {
         $(this).closest('tr').remove();
     });
 
-    // Podgląd formuły
     $('#balmo-btn-preview-formula').on('click', function () {
         var formula = $('#balmo-price-formula').val().trim();
         if (!formula) return;
@@ -317,7 +314,6 @@ jQuery(function ($) {
         });
     });
 
-    // Zapisz profil
     $('#balmo-btn-save-mapping').on('click', function () {
         var id          = $('#balmo-mapping-id').val();
         var name            = $('#balmo-mapping-name').val().trim();
@@ -378,7 +374,7 @@ jQuery(function ($) {
         });
     });
 
-    // Załaduj istniejące mapowanie na stronie edycji (dane wstrzyknięte przez PHP)
+    // Load existing mapping on the edit page (data injected by PHP)
     if (window.balmoEditMapping) {
         var d = window.balmoEditMapping;
         $.each(d.column_map, function (csvCol, wcField) {
@@ -386,7 +382,6 @@ jQuery(function ($) {
         });
     }
 
-    // Usuń profil
     $(document).on('click', '.balmo-btn-delete-mapping', function () {
         var id   = $(this).data('id');
         var name = $(this).data('name');
@@ -397,7 +392,7 @@ jQuery(function ($) {
     });
 
     // =========================================================
-    // STRONA: HARMONOGRAM
+    // PAGE: SCHEDULE
     // =========================================================
 
     $('#balmo-btn-save-schedule').on('click', function () {
@@ -455,7 +450,7 @@ jQuery(function ($) {
     });
 
     // =========================================================
-    // STRONA: HISTORIA
+    // PAGE: HISTORY
     // =========================================================
 
     $(document).on('click', '.balmo-btn-show-errors', function () {

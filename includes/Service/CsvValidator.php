@@ -6,19 +6,19 @@ if (!defined('ABSPATH')) exit;
 
 class CsvValidator
 {
-    // Wymagane kolumny dla każdego typu pliku
+    // Required columns for each file type
     private const REQUIRED = [
         'all' => ['name', 'price'],
         'ica' => ['price', 'stock', 'active'],
     ];
 
-    // Kolumny zalecane (ostrzeżenie jeśli brak)
+    // Recommended columns (warning if missing)
     private const RECOMMENDED = [
         'all' => ['product_code', 'active', 'stock', 'vat', 'category'],
         'ica' => ['product_id', 'product_code'],
     ];
 
-    // Oczekiwane typy danych dla znanych kolumn
+    // Expected data types for known columns
     private const TYPE_CHECKS = [
         'price'      => 'float',
         'stock'      => 'int',
@@ -43,7 +43,7 @@ class CsvValidator
             return ['errors' => [__('Nie można otworzyć pliku.', 'balmo')], 'warnings' => [], 'info' => []];
         }
 
-        // Pomiń BOM
+        // Skip BOM
         $bom = fread($handle, 3);
         if ($bom !== "\xEF\xBB\xBF") rewind($handle);
 
@@ -54,7 +54,7 @@ class CsvValidator
         }
         $headers = array_map('trim', $headers);
 
-        // Sprawdź wymagane kolumny
+        // Check required columns
         $required = self::REQUIRED[$source_type] ?? self::REQUIRED['all'];
         foreach ($required as $col) {
             if (!in_array($col, $headers, true)) {
@@ -62,7 +62,7 @@ class CsvValidator
             }
         }
 
-        // Sprawdź zalecane kolumny
+        // Check recommended columns
         $recommended = self::RECOMMENDED[$source_type] ?? [];
         foreach ($recommended as $col) {
             if (!in_array($col, $headers, true)) {
@@ -70,13 +70,13 @@ class CsvValidator
             }
         }
 
-        // Wykryj duplikaty nagłówków
+        // Detect duplicate headers
         $duplicates = array_keys(array_filter(array_count_values($headers), fn($c) => $c > 1));
         foreach ($duplicates as $dup) {
             $errors[] = sprintf(__('Zduplikowana kolumna: %s', 'balmo'), $dup);
         }
 
-        // Sprawdź typy danych na próbce (max 100 wierszy)
+        // Check data types on a sample (max 100 rows)
         $row_num        = 0;
         $type_errors    = [];
         $col_index      = array_flip($headers);
@@ -88,7 +88,7 @@ class CsvValidator
             foreach (self::TYPE_CHECKS as $col => $type) {
                 if (!isset($col_index[$col])) continue;
                 $val = trim($row[$col_index[$col]] ?? '');
-                if ($val === '') continue; // puste pola są OK
+                if ($val === '') continue; // empty fields are OK
 
                 if (!self::checkType($val, $type)) {
                     $type_errors[$col][] = $row_num;

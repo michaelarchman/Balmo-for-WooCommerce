@@ -27,7 +27,7 @@ class ImportPage
         <div class="wrap">
             <h1><?php esc_html_e('Import CSV — Balmo', 'balmo'); ?></h1>
 
-            <!-- KROK 1: Źródło pliku -->
+            <!-- STEP 1: File source -->
             <div id="balmo-step-1" class="balmo-step">
                 <h2><?php esc_html_e('Krok 1: Źródło pliku CSV', 'balmo'); ?></h2>
                 <table class="form-table" role="presentation">
@@ -90,7 +90,7 @@ class ImportPage
                 <span id="balmo-fetch-spinner" class="spinner" style="float:none;visibility:hidden;"></span>
             </div>
 
-            <!-- KROK 2: Wynik walidacji + podgląd -->
+            <!-- STEP 2: Validation result + preview -->
             <div id="balmo-step-2" class="balmo-step" style="display:none;">
                 <h2><?php esc_html_e('Krok 2: Wynik walidacji', 'balmo'); ?></h2>
                 <div id="balmo-validation-result"></div>
@@ -106,7 +106,7 @@ class ImportPage
                 </div>
             </div>
 
-            <!-- KROK 3: Postęp importu -->
+            <!-- STEP 3: Import progress -->
             <div id="balmo-step-3" class="balmo-step" style="display:none;">
                 <h2><?php esc_html_e('Krok 3: Import w toku', 'balmo'); ?></h2>
                 <table class="widefat striped" style="max-width:500px;">
@@ -158,7 +158,7 @@ class ImportPage
         <?php
     }
 
-    // --- AJAX: Pobierz i zwaliduj plik CSV ---
+    // --- AJAX: fetch and validate CSV file ---
 
     public static function ajaxFetchCsv(): void
     {
@@ -185,7 +185,7 @@ class ImportPage
             return;
         }
 
-        // Walidacja (plik jest już zawsze CSV w tym momencie)
+        // Validation (the file is always CSV at this point)
         $validation = CsvValidator::validate($result['file_path'], $result['delimiter'], $source_type);
 
         wp_send_json_success([
@@ -202,7 +202,7 @@ class ImportPage
 
 
     // --- AJAX: Rozpocznij import ---
-    // Zapisuje rekord do DB, zleca przetwarzanie WP-Cron. Przeglądarka tylko monitoruje.
+    // Writes the record to DB and hands processing to WP-Cron. The browser only monitors.
 
     public static function ajaxStartImport(): void
     {
@@ -222,7 +222,7 @@ class ImportPage
         $end_row     = max(0, (int) ($_POST['end_row'] ?? 0));
         $start_offset = $start_row - 1;
 
-        // Weryfikacja ścieżki — tylko pliki w katalogu uploads/balmo/
+        // Verify path: only files in the uploads/balmo/ directory
         if (!self::isAllowedFilePath($file_path)) {
             wp_send_json_error(__('Nieprawidłowa ścieżka pliku.', 'balmo'));
             return;
@@ -250,7 +250,7 @@ class ImportPage
         $end_offset   = $end_row;
         $segment_rows = $end_row - $start_row + 1;
 
-        // Pobierz match_by z profilu jeśli jest
+        // Take match_by from the profile if set
         if ($mapping_id) {
             $mapping_match = $wpdb->get_var($wpdb->prepare(
                 "SELECT match_by FROM " . \Balmo\table_mappings() . " WHERE id = %d", $mapping_id
@@ -284,14 +284,14 @@ class ImportPage
             return;
         }
 
-        // Sprawdź czy Action Scheduler jest dostępny (bundlowany z WooCommerce)
+        // Check that Action Scheduler is available (bundled with WooCommerce)
         if (!function_exists('as_enqueue_async_action')) {
             $wpdb->update(table_import_log(), ['status' => 'error'], ['id' => $import_id]);
             wp_send_json_error(__('Brak Action Scheduler. Wymagane WooCommerce 3.5+.', 'balmo'));
             return;
         }
 
-        // Enqueue pierwszej transzy — AS przetwarza w tle, przeglądarka tylko monitoruje
+        // Enqueue the first batch: AS processes it in the background, the browser only monitors
         as_enqueue_async_action('balmo_as_batch', [$import_id, $start_offset], 'balmo');
 
         wp_send_json_success([
@@ -300,7 +300,7 @@ class ImportPage
         ]);
     }
 
-    // --- AJAX: Przetwórz jedną transzę (dane pliku czytane z DB) ---
+    // --- AJAX: process one batch (file data read from DB) ---
 
     public static function ajaxProcessBatch(): void
     {
@@ -329,7 +329,7 @@ class ImportPage
             return;
         }
 
-        // Przy pierwszej transzy ustaw status na running
+        // On the first batch set status to running
         if ($log->status === 'pending') {
             $wpdb->update(
                 \Balmo\table_import_log(),
@@ -397,7 +397,7 @@ class ImportPage
         ]);
     }
 
-    // Weryfikacja ścieżki pliku — tylko katalog uploads/balmo/
+    // Verify file path: only the uploads/balmo/ directory
     private static function isAllowedFilePath(string $file_path): bool
     {
         if (empty($file_path)) return false;
@@ -406,13 +406,13 @@ class ImportPage
         $upload_dir = wp_upload_dir();
         $allowed    = realpath($upload_dir['basedir'] . '/balmo');
         if (!$allowed) return false;
-        // Normalizuj separatory — Windows używa \, Linux /
+        // Normalize separators: Windows uses \, Linux uses /
         $real    = str_replace('\\', '/', $real);
         $allowed = str_replace('\\', '/', $allowed);
         return strpos($real, $allowed) === 0;
     }
 
-    // --- AJAX: Status importu (do pollingu z harmonogramu) ---
+    // --- AJAX: import status (for polling from the scheduler) ---
 
     public static function ajaxImportStatus(): void
     {

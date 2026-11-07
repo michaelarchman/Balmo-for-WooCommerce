@@ -6,14 +6,14 @@ if (!defined('ABSPATH')) exit;
 
 class MappingPage
 {
-    // Pola WooCommerce dostępne do mapowania (bez zdjęć dodatkowych — te dodaje wcFields())
+    // WooCommerce fields available for mapping (without extra images, added by wcFields())
     public const WC_FIELDS = [
-        // Podstawowe
+        // Basic
         'post_title'        => 'Nazwa produktu',
         'post_content'      => 'Opis (pełny)',
         'post_excerpt'      => 'Krótki opis',
         'post_status'       => 'Status (publish/draft)',
-        // Meta WC
+        // WC meta
         '_sku'              => 'SKU',
         '_regular_price'    => 'Cena regularna',
         '_sale_price'       => 'Cena promocyjna',
@@ -21,24 +21,24 @@ class MappingPage
         '_manage_stock'     => 'Zarządzaj stanem',
         '_stock_status'     => 'Status magazynowy',
         '_weight'           => 'Waga (kg)',
-        // Taksonomie
+        // Taxonomies
         '_categories'       => 'Kategoria produktu',
         '_tags'             => 'Tagi produktu',
         '_attributes'       => 'Atrybuty produktu',
-        // Zdjęcia
+        // Images
         '_thumbnail'        => 'Główne zdjęcie (URL)',
-        // Podatek
+        // Tax
         'tax_class'         => 'Klasa podatkowa',
-        // Produkt
+        // Product
         '_product_id_ext'   => 'ID zewnętrzne (product_id)',
         '_ean'              => 'EAN',
         '_producer'         => 'Producent',
         '_unit'             => 'Jednostka miary',
-        // Pomijanie
+        // Skipping
         '_skip'             => '— Pomiń kolumnę —',
     ];
 
-    // Automatyczne mapowanie dla CSV drop.seltu.pl
+    // Auto-map for CSV drop.seltu.pl
     public const AUTO_MAP = [
         'product_id'        => '_product_id_ext',
         'product_code'      => '_sku',
@@ -64,7 +64,7 @@ class MappingPage
         'images 7'          => '_gallery_image_7',
     ];
 
-    // Automatyczne mapowanie dla JSON drop.seltu.pl
+    // Auto-map for JSON drop.seltu.pl
     public const AUTO_MAP_JSON = [
         'product_id'         => '_product_id_ext',
         'product_code'       => '_sku',
@@ -85,7 +85,7 @@ class MappingPage
         'attributes'         => '_attributes',
     ];
 
-    // WC_FIELDS + zdjęcia dodatkowe 2 … BALMO_MAX_GALLERY_IMAGES + 1, zaraz po zdjęciu głównym
+    // WC_FIELDS + extra images 2 … BALMO_MAX_GALLERY_IMAGES + 1, right after the main image
     public static function wcFields(): array
     {
         $fields = [];
@@ -372,7 +372,7 @@ class MappingPage
         </script>
         <?php endif; ?>
 
-        <!-- Szablon wiersza mapowania (ukryty) -->
+        <!-- Mapping row template (hidden) -->
         <script type="text/html" id="balmo-column-row-tpl">
             <tr class="balmo-map-row">
                 <td><input type="text" class="balmo-csv-col regular-text" value="{{csv_col}}"></td>
@@ -389,7 +389,7 @@ class MappingPage
         </script>
 
         <script>
-        // Dane dla JS: auto-mapy i WC fields
+        // Data for JS: auto-maps and WC fields
         window.balmoAutoMap     = <?php echo wp_json_encode(self::AUTO_MAP); ?>;
         window.balmoAutoMapJson = <?php echo wp_json_encode(self::autoMapJson()); ?>;
         window.balmoWcFields    = <?php echo wp_json_encode(array_keys(self::wcFields())); ?>;

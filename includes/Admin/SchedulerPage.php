@@ -24,7 +24,7 @@ class SchedulerPage
         $schedules = ImportScheduler::getAll();
         $mappings  = self::getMappingOptions();
 
-        // Następne uruchomienia WP-Cron
+        // Next WP-Cron runs
         $next_runs = [];
         foreach ($schedules as $s) {
             $hook      = 'balmo_cron_import_' . $s['id'];
@@ -38,7 +38,7 @@ class SchedulerPage
                 <?php esc_html_e('Cykliczny import uruchamiany przez WP-Cron. Każdy harmonogram to osobna reguła z własnym URL, profilem mapowania i interwałem.', 'balmo'); ?>
             </p>
 
-            <!-- Lista harmonogramów -->
+            <!-- Schedule list -->
             <?php if (empty($schedules)): ?>
                 <p><?php esc_html_e('Brak harmonogramów. Dodaj poniżej.', 'balmo'); ?></p>
             <?php else: ?>
@@ -88,7 +88,7 @@ class SchedulerPage
 
             <hr>
 
-            <!-- Formularz nowego harmonogramu -->
+            <!-- New schedule form -->
             <h2><?php esc_html_e('Dodaj harmonogram', 'balmo'); ?></h2>
             <table class="form-table" role="presentation">
                 <tr>

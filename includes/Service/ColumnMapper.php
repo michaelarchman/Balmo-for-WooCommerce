@@ -5,17 +5,17 @@ namespace Balmo\Service;
 if (!defined('ABSPATH')) exit;
 
 /**
- * Mapuje wiersz CSV na tablicę pól WooCommerce.
- * Stosuje nadpisania wartości i formuły cenowe.
+ * Maps a CSV row to an array of WooCommerce fields.
+ * Applies value overrides and price formulas.
  */
 class ColumnMapper
 {
     private array  $column_map;      // ['csv_col' => 'wc_field']
-    private array  $overrides;       // ['csv_col' => 'static_value'] lub ['wc_field' => 'static_value']
+    private array  $overrides;       // ['csv_col' => 'static_value'] or ['wc_field' => 'static_value']
     private string $price_formula;
     private string $match_by;
-    private array  $update_fields;   // pola do aktualizacji (tryb update)
-    private string $image_url_prefix; // prefix URL dla zdjęć (np. https://drop.seltu.pl/)
+    private array  $update_fields;   // fields to update (update mode)
+    private string $image_url_prefix; // image URL prefix (e.g. https://drop.seltu.pl/)
 
     public function __construct(?object $mapping)
     {
@@ -27,7 +27,7 @@ class ColumnMapper
             $this->update_fields   = json_decode($mapping->update_fields, true) ?: ['_regular_price', '_stock', 'post_status'];
             $this->image_url_prefix = rtrim($mapping->image_url_prefix ?? '', '/');
         } else {
-            // Użyj auto-mapy z MappingPage
+            // Use the auto-map from MappingPage
             $this->column_map       = \Balmo\Admin\MappingPage::AUTO_MAP;
             $this->overrides        = [];
             $this->price_formula    = '';
@@ -38,7 +38,7 @@ class ColumnMapper
     }
 
     /**
-     * Mapuj wiersz i zwróć powód pominięcia jeśli wiersz jest nieprawidłowy.
+     * Map a row and return the skip reason if the row is invalid.
      *
      * @return array{result: array|null, invalid_columns: string[]}
      */
@@ -72,9 +72,9 @@ class ColumnMapper
             return ['result' => null, 'invalid_columns' => $invalid_columns];
         }
 
-        // Fallback dla feedów JSON/CSV Colibra:
-        // jeśli mapowanie nie ustawiło post_title, ale surowy rekord ma "name",
-        // użyj tej wartości, żeby nie wywalać całego produktu przez pusty tytuł.
+        // Fallback for Colibra JSON/CSV feeds:
+        // if the mapping did not set post_title but the raw record has "name",
+        // use that value so the whole product is not rejected for an empty title.
         if (empty($mapped['post_title']) && !empty($row['name'])) {
             $mapped['post_title'] = trim((string) $row['name']);
         }
@@ -92,9 +92,9 @@ class ColumnMapper
     }
 
     /**
-     * Waliduje wartość dla konkretnego pola WC.
-     * Zwraca false jeśli wartość jest nieprawidłowa — wiersz zostanie pominięty
-     * chyba że profil zawiera override dla tej kolumny.
+     * Validates a value for a specific WC field.
+     * Returns false if the value is invalid, the row is then skipped
+     * unless the profile has an override for this column.
      */
     private function isValueValid(string $wc_field, string $value): bool
     {
@@ -108,41 +108,41 @@ class ColumnMapper
 
             '_weight'       => is_numeric(str_replace(',', '.', $v)) && (float) str_replace(',', '.', $v) >= 0,
 
-            // active: akceptuj 0, 1, true, false, yes, no (case-insensitive)
+            // active: accept 0, 1, true, false, yes, no (case-insensitive)
             'post_status'   => in_array(strtolower($v), ['0', '1', 'true', 'false', 'yes', 'no'], true),
 
-            // VAT: liczba z opcjonalnym % na końcu
+            // VAT: number with optional % at the end
             'tax_class'     => is_numeric(rtrim($v, '%')),
 
             // JSON list of {name, value} pairs from FeedRowFlattener
             '_attributes'   => is_array(json_decode($v, true)),
 
-            // Pozostałe pola — każda wartość jest akceptowalna
+            // Other fields: any value is accepted
             default         => true,
         };
     }
 
-    // Transformacje wartości dla konkretnych pól WC
+    // Value transformations for specific WC fields
     private function transformValue(string $wc_field, string $value, array $row): string
     {
         return match ($wc_field) {
 
-            // Cena — zastosuj formułę jeśli ustawiona
+            // Price: apply formula if set
             '_regular_price', '_sale_price' => $this->applyPriceFormula($value, $row),
 
-            // Aktywność 0/1 → publish/draft
+            // Active 0/1 → publish/draft
             'post_status' => $this->mapActiveToStatus($value),
 
-            // VAT — usuń znak % jeśli jest
+            // VAT: remove % sign if present
             'tax_class' => $this->mapVatToTaxClass(rtrim($value, '%')),
 
-            // Stan magazynowy — upewnij się że int
+            // Stock: make sure it is an int
             '_stock' => (string) max(0, (int) $value),
 
-            // Waga — zamień przecinek na kropkę
+            // Weight: replace comma with dot
             '_weight' => str_replace(',', '.', $value),
 
-            // Zdjęcia — dodaj prefix jeśli URL jest relatywny
+            // Images: add prefix if the URL is relative
             default => $this->isImageField($wc_field) ? $this->applyImagePrefix($value) : $value,
         };
     }
@@ -159,7 +159,7 @@ class ColumnMapper
         $result = PriceFormula::evaluate($this->price_formula, $price, $vat);
 
         if (is_wp_error($result)) {
-            // Formuła błędna — wróć do oryginalnej ceny
+            // Invalid formula: fall back to the original price
             return number_format($price, 4, '.', '');
         }
 
@@ -193,7 +193,7 @@ class ColumnMapper
     private function mapVatToTaxClass(string $vat): string
     {
         // WooCommerce tax classes: '' = standard, 'reduced-rate', 'zero-rate'
-        // Mapowanie prostych wartości liczbowych
+        // Mapping of simple numeric values
         $vat_num = (float) $vat;
         if ($vat_num === 0.0) return 'zero-rate';
         if ($vat_num <= 8.0) return 'reduced-rate';

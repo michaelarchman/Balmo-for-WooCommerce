@@ -5,15 +5,15 @@ namespace Balmo\Service;
 if (!defined('ABSPATH')) exit;
 
 /**
- * Spłaszcza jeden produkt (tablica z JSON lub XML) do płaskiego wiersza CSV.
- * Wspólny dla JsonFlattener i XmlFlattener, żeby oba formaty dawały te same kolumny.
- * Zdjęcia: "images[]" (uproszczony JSON) lub "main_image" + "additional_images.image[]".
- * Atrybuty (JSON "atributes", XML "attributes") trafiają do jednej kolumny "attributes" jako JSON [{name, value}, ...].
+ * Flattens one product (array from JSON or XML) into a flat CSV row.
+ * Shared by JsonFlattener and XmlFlattener so both formats produce the same columns.
+ * Images: "images[]" (simplified JSON) or "main_image" + "additional_images.image[]".
+ * Attributes (JSON "atributes", XML "attributes") go into one "attributes" column as JSON [{name, value}, ...].
  */
 class FeedRowFlattener
 {
     /**
-     * @param int $dropped Wyjście: liczba zdjęć dodatkowych ponad BALMO_MAX_GALLERY_IMAGES.
+     * @param int $dropped Output: number of extra images beyond BALMO_MAX_GALLERY_IMAGES.
      */
     public static function flatten(array $product, int &$dropped = 0): array
     {
@@ -21,7 +21,7 @@ class FeedRowFlattener
         $flat = [];
 
         foreach ($product as $key => $value) {
-            // "images": ["url1", "url2"] — format uproszczony (np. drop.seltu.pl)
+            // "images": ["url1", "url2"] — simplified format (e.g. drop.seltu.pl)
             if ($key === 'images' && is_array($value)) {
                 if (isset($value[0])) {
                     $flat['main_image'] = (string) $value[0];
@@ -33,7 +33,7 @@ class FeedRowFlattener
                 continue;
             }
 
-            // "additional_images": {"image": [...]} lub {"image": "url"}
+            // "additional_images": {"image": [...]} or {"image": "url"}
             if ($key === 'additional_images' && is_array($value)) {
                 $imgs = [];
                 if (isset($value['image'])) {
@@ -57,27 +57,27 @@ class FeedRowFlattener
                 continue;
             }
 
-            // Booleany: true → "1", false → "0"
+            // Booleans: true → "1", false → "0"
             if (is_bool($value)) {
                 $flat[$key] = $value ? '1' : '0';
                 continue;
             }
 
-            // Skalary
+            // Scalars
             if (!is_array($value)) {
                 $flat[$key] = (string) $value;
                 continue;
             }
 
-            // Inne zagnieżdżone struktury — pomiń
+            // Other nested structures: skip
         }
 
         return $flat;
     }
 
     /**
-     * Nagłówki zdjęć wyznaczane z próbki produktów mogą pominąć kolumny z dalszych produktów.
-     * Gdy feed ma zdjęcia, uzupełnij wszystkie additional_image_1 … additional_image_N.
+     * Image headers taken from a product sample may skip columns from later products.
+     * When the feed has images, fill all additional_image_1 … additional_image_N.
      */
     public static function completeImageHeaders(array $headers): array
     {

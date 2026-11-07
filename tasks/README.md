@@ -17,7 +17,7 @@
 | 08 | `08-kategorie-rodzic.md` | 3 | todo | — |
 | 09 | `09-ean-gtin.md` | 3 | blocked | D1–D3 |
 | 10 | `10-wersja-php.md` | 1 | done 2026-11-07 | — |
-| 11 | `11-komentarze-po-angielsku.md` | 1 | todo | — (samodzielnie, dotyka wszystkich plików) |
+| 11 | `11-komentarze-po-angielsku.md` | 1 | done 2026-11-07 | — |
 
 ## Drzewo robocze
 

@@ -13,10 +13,10 @@ class ImportScheduler
 
     public static function init(): void
     {
-        // Rejestruj własne interwały WP-Cron
+        // Register custom WP-Cron intervals
         add_filter('cron_schedules', [self::class, 'addCronIntervals']);
 
-        // Rejestruj hooki dla zapisanych harmonogramów
+        // Register hooks for saved schedules
         foreach (self::getAll() as $schedule) {
             $hook = 'balmo_cron_import_' . $schedule['id'];
             add_action($hook, function () use ($schedule): void {
@@ -34,13 +34,13 @@ class ImportScheduler
         return $schedules;
     }
 
-    // Pobierz wszystkie harmonogramy z options
+    // Get all schedules from options
     public static function getAll(): array
     {
         $schedules = get_option(self::OPTION_KEY, []);
         if (!is_array($schedules)) return [];
 
-        // Dołącz nazwę i format profilu mapowania (bez profilu: CSV)
+        // Attach name and format of the mapping profile (no profile: CSV)
         global $wpdb;
         foreach ($schedules as &$s) {
             $s['mapping_name'] = null;
@@ -60,13 +60,13 @@ class ImportScheduler
         return $schedules;
     }
 
-    // Zapisz nowy harmonogram i zaplanuj WP-Cron
+    // Save new schedule and schedule WP-Cron
     public static function save(array $data): int
     {
         $schedules = get_option(self::OPTION_KEY, []);
         if (!is_array($schedules)) $schedules = [];
 
-        // Generuj ID
+        // Generate ID
         $max_id = 0;
         foreach ($schedules as $s) {
             $max_id = max($max_id, (int) ($s['id'] ?? 0));
@@ -87,13 +87,12 @@ class ImportScheduler
         $schedules[] = $schedule;
         update_option(self::OPTION_KEY, $schedules, false);
 
-        // Zaplanuj WP-Cron
         self::scheduleWpCron($schedule);
 
         return $id;
     }
 
-    // Usuń harmonogram i odplanuj WP-Cron
+    // Delete schedule and unschedule WP-Cron
     public static function delete(int $id): void
     {
         $schedules = get_option(self::OPTION_KEY, []);
@@ -106,7 +105,7 @@ class ImportScheduler
         update_option(self::OPTION_KEY, array_values($schedules), false);
     }
 
-    // Uruchom natychmiast (tworzy import_log, zwraca import_id)
+    // Run immediately (creates import_log, returns import_id)
     public static function runNow(int $id): int|\WP_Error
     {
         $schedules = get_option(self::OPTION_KEY, []);
@@ -125,7 +124,7 @@ class ImportScheduler
         return self::execute($schedule);
     }
 
-    // Wyczyść wszystkie harmonogramy (przy deaktywacji)
+    // Clear all schedules (on deactivation)
     public static function clearAllSchedules(): void
     {
         foreach (self::getAll() as $schedule) {
@@ -146,7 +145,7 @@ class ImportScheduler
         return $labels[$interval] ?? $interval;
     }
 
-    // --- Prywatne ---
+    // --- Private ---
 
     private static function scheduleWpCron(array $schedule): void
     {
@@ -156,7 +155,7 @@ class ImportScheduler
         $interval = $schedule['interval'];
         $run_time = $schedule['run_time'] ?? '06:00';
 
-        // Oblicz timestamp pierwszego uruchomienia
+        // Compute timestamp of the first run
         [$h, $m] = array_map('intval', explode(':', $run_time));
         $tz      = wp_timezone();
         $now     = new \DateTimeImmutable('now', $tz);
@@ -166,7 +165,7 @@ class ImportScheduler
             $first = $first->modify('+1 day');
         }
 
-        // Dla interwałów krótszych niż dobowy — uruchom od razu
+        // For intervals shorter than daily: run right away
         if (in_array($interval, ['hourly', 'twicedaily'], true)) {
             $first = $now->modify('+1 minute');
         }
@@ -183,12 +182,12 @@ class ImportScheduler
         return in_array($interval, $valid, true) ? $interval : 'daily';
     }
 
-    // Główna logika wykonania importu przez cron
+    // Main import execution logic run by cron
     private static function execute(array $schedule): int|\WP_Error
     {
         global $wpdb;
 
-        // Pobierz profil mapowania — określa format pliku
+        // Get mapping profile: it sets the file format
         $mapping = null;
         if (!empty($schedule['mapping_id'])) {
             $mapping = $wpdb->get_row($wpdb->prepare(
@@ -198,13 +197,13 @@ class ImportScheduler
         }
         $format = $mapping ? FeedLoader::normalizeFormat((string) ($mapping->format ?? 'csv')) : 'csv';
 
-        // Pobierz plik (JSON jest konwertowany do CSV)
+        // Fetch the file (JSON is converted to CSV)
         $fetcher_result = FeedLoader::fromUrl($schedule['url'], $schedule['source_type'], $format);
         if (is_wp_error($fetcher_result)) {
             return $fetcher_result;
         }
 
-        // Szybka walidacja
+        // Quick validation
         $validation = CsvValidator::validate(
             $fetcher_result['file_path'],
             $fetcher_result['delimiter'],
@@ -215,7 +214,6 @@ class ImportScheduler
             return new \WP_Error('validation_failed', implode('; ', $validation['errors']));
         }
 
-        // Utwórz rekord importu
         $wpdb->insert(
             \Balmo\table_import_log(),
             [
@@ -237,7 +235,7 @@ class ImportScheduler
             return new \WP_Error('db_error', __('Nie można utworzyć rekordu importu.', 'balmo'));
         }
 
-        // Przetwarzaj w transzach synchronicznie (cron ma więcej czasu)
+        // Process in batches synchronously (cron has more time)
         $log      = $wpdb->get_row($wpdb->prepare("SELECT * FROM " . \Balmo\table_import_log() . " WHERE id = %d", $import_id));
         $importer = new \Balmo\Service\ProductImporter($import_id, $log, $mapping);
         $batch    = \Balmo\get_background_batch_size();
@@ -245,7 +243,7 @@ class ImportScheduler
         $total    = $fetcher_result['total_rows'];
 
         while ($offset < $total) {
-            // Sprawdź czy nie anulowano
+            // Check whether the import was cancelled
             $current_status = $wpdb->get_var($wpdb->prepare(
                 "SELECT status FROM " . \Balmo\table_import_log() . " WHERE id = %d", $import_id
             ));
@@ -272,7 +270,7 @@ class ImportScheduler
             $offset = $next_offset;
         }
 
-        // Zakończ import
+        // Finish import
         $current_status = $wpdb->get_var($wpdb->prepare(
             "SELECT status FROM " . \Balmo\table_import_log() . " WHERE id = %d", $import_id
         ));

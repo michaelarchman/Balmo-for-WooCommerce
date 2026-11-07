@@ -9,7 +9,7 @@ class CsvFetcher
     private const MAX_FILE_SIZE = 52428800; // 50 MB
     private const PREVIEW_ROWS  = 10;
 
-    // Pobierz CSV z URL
+    // Fetch CSV from URL
     public static function fromUrl(string $url, string $source_type): array|\WP_Error
     {
         if (empty($url)) {
@@ -42,7 +42,7 @@ class CsvFetcher
         return self::processFile($file_path, $source_type, $url);
     }
 
-    // Pobierz CSV z uploadu
+    // Fetch CSV from upload
     public static function fromUpload(array $file, string $source_type): array|\WP_Error
     {
         if (empty($file['tmp_name']) || !is_uploaded_file($file['tmp_name'])) {
@@ -64,7 +64,7 @@ class CsvFetcher
         return self::processFile($dest, $source_type, '');
     }
 
-    // Przetworz plik — wykryj separator, zlicz wiersze, zrób podgląd
+    // Process file: detect delimiter, count rows, build preview
     private static function processFile(string $file_path, string $source_type, string $source_url): array|\WP_Error
     {
         if (!file_exists($file_path) || !is_readable($file_path)) {
@@ -76,13 +76,13 @@ class CsvFetcher
             return new \WP_Error('file_open_error', __('Nie można otworzyć pliku.', 'balmo'));
         }
 
-        // Usuń BOM (UTF-8)
+        // Skip UTF-8 BOM
         $bom = fread($handle, 3);
         if ($bom !== "\xEF\xBB\xBF") {
             rewind($handle);
         }
 
-        // Wykryj separator z pierwszego wiersza
+        // Detect delimiter from the first line
         $first_line = fgets($handle);
         if ($first_line === false) {
             fclose($handle);
@@ -93,7 +93,6 @@ class CsvFetcher
         rewind($handle);
         if ($bom === "\xEF\xBB\xBF") fread($handle, 3); // skip BOM again
 
-        // Wczytaj nagłówki
         $headers = fgetcsv($handle, 0, $delimiter);
         if (!$headers) {
             fclose($handle);
@@ -101,7 +100,7 @@ class CsvFetcher
         }
         $headers = array_map('trim', $headers);
 
-        // Podgląd pierwszych N wierszy + zlicz wszystkie
+        // Preview first N rows + count all rows
         $preview     = [];
         $total_rows  = 0;
 
@@ -127,10 +126,10 @@ class CsvFetcher
 
     private static function detectDelimiter(string $line, string $source_type): string
     {
-        // ICA zawsze używa średnika
+        // ICA always uses semicolon
         if ($source_type === 'ica') return ';';
 
-        // Wykryj automatycznie
+        // Detect automatically
         $semicolons = substr_count($line, ';');
         $commas     = substr_count($line, ',');
 

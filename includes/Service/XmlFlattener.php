@@ -5,10 +5,10 @@ namespace Balmo\Service;
 if (!defined('ABSPATH')) exit;
 
 /**
- * Pobiera plik XML Colibra i konwertuje go do CSV gotowego do importu.
- * Czyta strumieniowo (XMLReader), po jednym elemencie <Product>, z dowolnego poziomu dokumentu.
- * Plik jest niezaufany: bez sieci (LIBXML_NONET), bez rozwijania encji, DOCTYPE jest odrzucany.
- * Spłaszczanie pojedynczego produktu robi FeedRowFlattener (wspólny z JsonFlattener).
+ * Fetches a Colibra XML file and converts it to CSV ready for import.
+ * Reads as a stream (XMLReader), one <Product> element at a time, from any depth of the document.
+ * The file is untrusted: no network (LIBXML_NONET), no entity expansion, DOCTYPE is rejected.
+ * Flattening a single product is done by FeedRowFlattener (shared with JsonFlattener).
  */
 class XmlFlattener
 {
@@ -17,7 +17,7 @@ class XmlFlattener
     private const HEADER_SAMPLE = 50;
 
     /**
-     * Pobierz XML z URL i zapisz jako CSV.
+     * Fetch XML from URL and save as CSV.
      *
      * @return array|\WP_Error
      */
@@ -62,7 +62,7 @@ class XmlFlattener
     }
 
     /**
-     * Prześlij XML i zapisz jako CSV.
+     * Upload XML and save as CSV.
      *
      * @return array|\WP_Error
      */
@@ -89,13 +89,13 @@ class XmlFlattener
     }
 
     /**
-     * Konwertuj XML → CSV, zwróć dane kompatybilne z CsvFetcher.
+     * Convert XML to CSV, return data compatible with CsvFetcher.
      *
      * @return array|\WP_Error
      */
     public static function convertToCsv(string $xml_path, string $csv_path, string $source_type, string $source_url)
     {
-        // Przebieg 1: nagłówki z próbki pierwszych produktów
+        // Pass 1: headers from a sample of the first products
         $headers = [];
         $seen    = 0;
         $error   = self::eachProduct($xml_path, function (array $product) use (&$headers, &$seen) {
@@ -120,7 +120,7 @@ class XmlFlattener
         fwrite($handle, "\xEF\xBB\xBF"); // BOM UTF-8
         fputcsv($handle, $headers);
 
-        // Przebieg 2: zapis wierszy
+        // Pass 2: write rows
         $preview        = [];
         $total_rows     = 0;
         $overflow_count = 0;
@@ -169,8 +169,8 @@ class XmlFlattener
     }
 
     /**
-     * Przejdź po elementach <Product> i wywołaj $callback(array $product).
-     * Callback zwraca false, żeby przerwać (próbka nagłówków). $sample = true pomija kontrolę błędu parsowania po przerwaniu.
+     * Iterate over <Product> elements and call $callback(array $product).
+     * Callback returns false to stop (header sample). $sample = true skips the parse error check after stopping.
      *
      * @return \WP_Error|null
      */
@@ -210,7 +210,7 @@ class XmlFlattener
                 $stopped = true;
                 break;
             }
-            $reader->next(); // pomiń poddrzewo bieżącego <Product>
+            $reader->next(); // skip subtree of current <Product>
         }
 
         $reader->close();
@@ -237,7 +237,7 @@ class XmlFlattener
         return $error;
     }
 
-    // Element <Product> → tablica w kształcie zgodnym z FeedRowFlattener
+    // <Product> element as an array in the shape FeedRowFlattener expects
     private static function nodeToArray(\SimpleXMLElement $node): array
     {
         $product = [];
@@ -266,11 +266,11 @@ class XmlFlattener
                 continue;
             }
 
-            if ($child->count() > 0) continue; // inne zagnieżdżone struktury — pomiń, jak w JSON
+            if ($child->count() > 0) continue; // other nested structures: skip, as in JSON
 
             $value = (string) $child;
 
-            // ICA XML: produkt nieaktywny ma pusty <active></active>
+            // ICA XML: inactive product has empty <active></active>
             if ($name === 'active' && trim($value) === '') {
                 $value = '0';
             }

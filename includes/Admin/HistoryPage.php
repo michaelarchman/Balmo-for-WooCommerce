@@ -35,7 +35,7 @@ class HistoryPage
 
         $pages = (int) ceil($total / self::PER_PAGE);
 
-        // Auto-czyść stare logi
+        // Auto-purge old logs
         self::purgeOldLogs();
         ?>
         <div class="wrap">
@@ -115,7 +115,7 @@ class HistoryPage
                     </tbody>
                 </table>
 
-                <!-- Paginacja -->
+                <!-- Pagination -->
                 <?php if ($pages > 1): ?>
                     <div class="tablenav bottom">
                         <div class="tablenav-pages">
@@ -134,7 +134,7 @@ class HistoryPage
                 <?php endif; ?>
             <?php endif; ?>
 
-            <!-- Modal błędów -->
+            <!-- Errors modal -->
             <div id="balmo-errors-modal" style="display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);
                 background:#fff;padding:20px;z-index:9999;max-width:700px;width:90%;max-height:80vh;overflow-y:auto;
                 border:1px solid #ccc;box-shadow:0 5px 20px rgba(0,0,0,.3);">
@@ -196,7 +196,7 @@ class HistoryPage
 
     private static function purgeOldLogs(bool $force = false): void
     {
-        // Uruchamiaj auto-purge max raz dziennie
+        // Run auto-purge at most once a day
         if (!$force && get_transient('balmo_last_purge')) return;
         set_transient('balmo_last_purge', 1, DAY_IN_SECONDS);
 
@@ -205,7 +205,7 @@ class HistoryPage
 
         global $wpdb;
 
-        // Usuń błędy powiązane ze starymi importami
+        // Delete errors of old imports
         $wpdb->query($wpdb->prepare(
             "DELETE e FROM " . \Balmo\table_import_errors() . " e
              INNER JOIN " . \Balmo\table_import_log() . " l ON e.import_id = l.id
@@ -213,7 +213,7 @@ class HistoryPage
             $cutoff
         ));
 
-        // Usuń stare logi
+        // Delete old logs
         $wpdb->query($wpdb->prepare(
             "DELETE FROM " . \Balmo\table_import_log() . "
              WHERE created_at < %s AND status IN ('done','error','cancelled')",

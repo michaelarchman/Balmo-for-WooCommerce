@@ -1,9 +1,9 @@
 ---
 id: "11"
-status: todo
+status: done
 commit: "style: [11] translate code comments to english"
 after: []
-closed: ""
+closed: "2026-11-07"
 note: "Dotyka każdego pliku kodu. Wykonywać samodzielnie, bez innych zadań w drzewie."
 ---
 

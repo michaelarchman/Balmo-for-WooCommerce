@@ -5,9 +5,9 @@ namespace Balmo\Service;
 if (!defined('ABSPATH')) exit;
 
 /**
- * Przetwarza transzę wierszy CSV i tworzy/aktualizuje produkty WooCommerce.
- * Zaprojektowany do pracy zarówno z AJAX (transze po ~200 wierszy)
- * jak i z WP-Cron (wszystkie wiersze sekwencyjnie).
+ * Processes a batch of CSV rows and creates/updates WooCommerce products.
+ * Designed for both AJAX (batches of ~200 rows)
+ * and WP-Cron (all rows sequentially).
  */
 class ProductImporter
 {
@@ -34,12 +34,12 @@ class ProductImporter
     }
 
     /**
-     * Przetwórz jedną transzę wierszy CSV.
+     * Process one batch of CSV rows.
      *
-     * @param string $file_path Ścieżka do pliku CSV
+     * @param string $file_path Path to the CSV file
      * @param string $delimiter Separator CSV
-     * @param int    $offset    Od którego wiersza danych (nie licząc nagłówka) zacząć
-     * @param int    $batch     Ile wierszy przetworzyć
+     * @param int    $offset    First data row to process (header not counted)
+     * @param int    $batch     Number of rows to process
      * @return array ['processed', 'created', 'updated', 'skipped', 'errors']
      */
     public function processBatch(string $file_path, string $delimiter, int $offset, int $batch): array
@@ -60,11 +60,10 @@ class ProductImporter
             $this->logError(0, [], $warning);
         }
 
-        // Pomiń BOM
+        // Skip BOM
         $bom = fread($handle, 3);
         if ($bom !== "\xEF\xBB\xBF") rewind($handle);
 
-        // Wczytaj nagłówki
         $headers = fgetcsv($handle, 0, $delimiter);
         if (!$headers) {
             fclose($handle);
@@ -72,18 +71,18 @@ class ProductImporter
         }
         $headers = array_map('trim', $headers);
 
-        // Przesuń do offsetu (pomiń wiersze przed transzą)
+        // Seek to offset (skip rows before the batch)
         for ($i = 0; $i < $offset; $i++) {
             if (fgetcsv($handle, 0, $delimiter) === false) break;
         }
 
-        // Przetwarzaj wiersze transzy
+        // Process batch rows
         $row_num = $offset + 1;
         $count   = 0;
 
         while ($count < $batch && ($row = fgetcsv($handle, 0, $delimiter)) !== false) {
             $rows_read++;
-            // Puste wiersze — pomiń
+            // Empty rows: skip
             if (count(array_filter($row, fn($v) => trim($v) !== '')) === 0) {
                 $row_num++;
                 $stats['next_offset'] = $offset + $rows_read;
@@ -122,7 +121,7 @@ class ProductImporter
         return $stats;
     }
 
-    // Przetwórz pojedynczy wiersz, zwróć 'created'|'updated'|'skipped'
+    // Process one row, return 'created'|'updated'|'skipped'
     private function processRow(array $data, int $row_num): string
     {
         $this->current_row  = $row_num;
@@ -130,7 +129,7 @@ class ProductImporter
 
         $map_result = $this->mapper->mapRowWithReason($data, $this->import_mode);
 
-        // Wiersz ma kolumny z nieprawidłową wartością bez override → pomijamy
+        // Row has columns with an invalid value and no override: skip
         if ($map_result['result'] === null) {
             $cols = implode(', ', $map_result['invalid_columns']);
             $this->logError($row_num, $data, sprintf(
@@ -142,14 +141,14 @@ class ProductImporter
 
         $mapped = $map_result['result'];
 
-        // Znajdź istniejący produkt
+        // Find existing product
         $match_by   = $this->mapper->getMatchBy();
         $sku        = $data['product_code'] ?? $mapped['_sku'] ?? '';
         $ext_id     = (int) ($data['product_id'] ?? 0);
         $product_id = $this->findProduct($match_by, $sku, $ext_id);
 
         if ($this->import_mode === 'update' && !$product_id) {
-            return 'skipped'; // Tryb update — nie twórz nowych
+            return 'skipped'; // Update mode: do not create new products
         }
 
         if ($product_id) {
@@ -161,7 +160,7 @@ class ProductImporter
         }
     }
 
-    // Znajdź istniejący produkt WC po SKU lub meta ID zewnętrznym
+    // Find existing WC product by SKU or external ID meta
     private function findProduct(string $match_by, string $sku, int $ext_id): int
     {
         global $wpdb;
@@ -183,7 +182,7 @@ class ProductImporter
         return 0;
     }
 
-    // Utwórz nowy produkt
+    // Create new product
     private function createProduct(array $mapped, array $raw): void
     {
         $title      = $mapped['post_title'] ?? '';
@@ -207,13 +206,13 @@ class ProductImporter
             throw new \InvalidArgumentException($post_id->get_error_message());
         }
 
-        // Domyślny typ produktu: simple
+        // Default product type: simple
         wp_set_object_terms($post_id, 'simple', 'product_type');
 
         $this->saveProductMeta($post_id, $mapped, $raw, true);
     }
 
-    // Zaktualizuj istniejący produkt
+    // Update existing product
     private function updateProduct(int $product_id, array $mapped, array $raw): void
     {
         $update = [];
@@ -240,7 +239,7 @@ class ProductImporter
         $this->saveProductMeta($product_id, $mapped, $raw, false);
     }
 
-    // Zapisz meta pola produktu WooCommerce
+    // Save WooCommerce product meta fields
     private function saveProductMeta(int $post_id, array $mapped, array $raw, bool $is_new): void
     {
         // SKU
@@ -251,7 +250,7 @@ class ProductImporter
             }
         }
 
-        // Cena
+        // Price
         if (isset($mapped['_regular_price'])) {
             $price = wc_format_decimal($mapped['_regular_price']);
             update_post_meta($post_id, '_regular_price', $price);
@@ -263,7 +262,7 @@ class ProductImporter
             update_post_meta($post_id, '_sale_price', $sale);
         }
 
-        // Stan magazynowy
+        // Stock
         if (isset($mapped['_stock'])) {
             $stock = (int) $mapped['_stock'];
             update_post_meta($post_id, '_manage_stock', 'yes');
@@ -272,17 +271,17 @@ class ProductImporter
             update_post_meta($post_id, '_stock_status', $stock_status);
             wc_update_product_stock_status($post_id, $stock_status);
         } elseif ($is_new) {
-            // Nowy produkt bez zamapowanego/prawidłowego stanu — brak zarządzania, domyślnie "w magazynie"
+            // New product without a valid mapped stock: no stock management, default "in stock"
             update_post_meta($post_id, '_manage_stock', 'no');
             update_post_meta($post_id, '_stock_status', 'instock');
         }
 
-        // Waga
+        // Weight
         if (isset($mapped['_weight'])) {
             update_post_meta($post_id, '_weight', wc_format_decimal($mapped['_weight']));
         }
 
-        // ID zewnętrzne
+        // External ID
         if (isset($mapped['_product_id_ext'])) {
             update_post_meta($post_id, '_product_id_ext', sanitize_text_field($mapped['_product_id_ext']));
         }
@@ -292,17 +291,17 @@ class ProductImporter
             update_post_meta($post_id, '_ean', sanitize_text_field($mapped['_ean']));
         }
 
-        // Producent
+        // Producer
         if (isset($mapped['_producer'])) {
             update_post_meta($post_id, '_producer', sanitize_text_field($mapped['_producer']));
         }
 
-        // Jednostka
+        // Unit
         if (isset($mapped['_unit'])) {
             update_post_meta($post_id, '_unit', sanitize_text_field($mapped['_unit']));
         }
 
-        // Klasa podatkowa
+        // Tax class
         if (isset($mapped['tax_class'])) {
             update_post_meta($post_id, '_tax_class', sanitize_text_field($mapped['tax_class']));
         }
@@ -312,18 +311,18 @@ class ProductImporter
             $this->assignCategories($post_id, $mapped['_categories']);
         }
 
-        // Tagi
+        // Tags
         if (isset($mapped['_tags'])) {
             wp_set_object_terms($post_id, array_map('trim', explode(',', $mapped['_tags'])), 'product_tag');
         }
 
-        // Zdjęcia
+        // Images
         $this->saveImages($post_id, $mapped);
 
-        // Wyczyść cache WooCommerce
+        // Clear WooCommerce cache
         wc_delete_product_transients($post_id);
 
-        // Przelicz ceny (ważne dla WC)
+        // Recalculate prices (required by WC)
         if ($is_new || isset($mapped['_regular_price'])) {
             $product = wc_get_product($post_id);
             if ($product) {
@@ -331,7 +330,7 @@ class ProductImporter
             }
         }
 
-        // Atrybuty — po zapisie ceny, żeby pracować na świeżym obiekcie produktu
+        // Attributes: after saving the price, so they work on a fresh product object
         if (isset($mapped['_attributes'])) {
             $this->assignAttributes($post_id, $mapped['_attributes']);
         }
@@ -533,7 +532,7 @@ class ProductImporter
         return $this->term_cache[$key] = (int) $result['term_id'];
     }
 
-    // Utwórz/znajdź kategorie z hierarchii "Kobiety > Bransoletki na nogę"
+    // Create or find categories from a hierarchy such as "Women > Anklets"
     private function assignCategories(int $post_id, string $category_str): void
     {
         if (empty(trim($category_str))) return;
@@ -545,10 +544,10 @@ class ProductImporter
         foreach ($parts as $cat_name) {
             if (empty($cat_name)) continue;
 
-            // Szukaj istniejącej kategorii pod danym rodzicem
+            // Look up an existing category under the given parent
             $term = get_term_by('name', $cat_name, 'product_cat');
             if (!$term) {
-                // Utwórz nową kategorię
+                // Create new category
                 $result = wp_insert_term($cat_name, 'product_cat', ['parent' => $parent_id]);
                 if (is_wp_error($result)) continue;
                 $term_id = $result['term_id'];
@@ -565,7 +564,7 @@ class ProductImporter
         }
     }
 
-    // Zapisz zdjęcia jako zewnętrzne URL (bez pobierania)
+    // Save images as external URLs (no download)
     private function saveImages(int $post_id, array $mapped): void
     {
         if (get_option('balmo_image_mode', 'none') === 'external') {
@@ -573,7 +572,7 @@ class ProductImporter
         }
     }
 
-    // Tryb external — wirtualne załączniki WP z zewnętrznym URL
+    // External mode: virtual WP attachments with an external URL
     private function saveExternalImages(int $post_id, array $mapped): void
     {
         $main_url = isset($mapped['_thumbnail']) ? esc_url_raw((string) $mapped['_thumbnail']) : '';
@@ -608,7 +607,7 @@ class ProductImporter
         }
     }
 
-    // Utwórz wirtualny załącznik WP dla zewnętrznego URL (bez pobierania pliku)
+    // Create a virtual WP attachment for an external URL (no file download)
     private function getOrCreateExternalAttachment(string $url, int $post_id): int
     {
         global $wpdb;
@@ -664,7 +663,7 @@ class ProductImporter
         return $map[$ext] ?? 'image/jpeg';
     }
 
-    // Tryb sideload — pobierz obraz i zapisz w bibliotece mediów
+    // Sideload mode: download the image and save it to the media library
     private function logError(int $row_num, array $row_data, string $message): void
     {
         global $wpdb;
@@ -673,7 +672,7 @@ class ProductImporter
             [
                 'import_id'     => $this->import_id,
                 'row_number'    => $row_num,
-                'row_data'      => wp_json_encode(array_slice($row_data, 0, 10)), // max 10 pól
+                'row_data'      => wp_json_encode(array_slice($row_data, 0, 10)), // max 10 fields
                 'error_message' => mb_substr($message, 0, 500),
             ],
             ['%d', '%d', '%s', '%s']
