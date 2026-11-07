@@ -1,11 +1,11 @@
 ---
 id: "17"
-status: blocked
+status: done
 commit: "feat: [17] add product audit page"
 model: średni
 after: ["13", "16"]
-closed: ""
-note: "Decyzje D1–D3 do potwierdzenia; czeka na 13, 16."
+closed: "2026-11-07"
+note: "D1–D3 przyjęte wg propozycji (Wykonaj). Poza zakresem: HistoryPage::statusLabel public. Filtr listy przez istniejący balmo_integration_filter."
 ---
 
 # 17 — Audyt produktów z importu
@@ -14,7 +14,7 @@ note: "Decyzje D1–D3 do potwierdzenia; czeka na 13, 16."
 
 Brak widoku stanu produktów z importu: ile jest produktów danej integracji, ile bez zdjęcia, ile ukrytych, ile bez ceny. Problemy wychodzą dopiero na froncie sklepu.
 
-## Decyzje (do potwierdzenia)
+## Decyzje (przyjęte wg propozycji)
 
 | # | Pytanie | Propozycja | Powód |
 |---|---|---|---|

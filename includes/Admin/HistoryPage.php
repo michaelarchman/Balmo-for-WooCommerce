@@ -238,7 +238,7 @@ class HistoryPage
         ));
     }
 
-    private static function statusLabel(string $status): string
+    public static function statusLabel(string $status): string
     {
         $labels = [
             'pending'   => __('Oczekuje', 'balmo'),

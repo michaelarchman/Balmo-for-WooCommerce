@@ -68,6 +68,15 @@ class Settings
 
         add_submenu_page(
             self::MENU_SLUG,
+            __('Audyt produktów', 'balmo'),
+            __('Audyt', 'balmo'),
+            'manage_woocommerce',
+            AuditPage::PAGE_SLUG,
+            [AuditPage::class, 'render']
+        );
+
+        add_submenu_page(
+            self::MENU_SLUG,
             __('Narzędzia Balmo', 'balmo'),
             __('Narzędzia', 'balmo'),
             'manage_woocommerce',

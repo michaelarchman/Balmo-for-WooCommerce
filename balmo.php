@@ -14,6 +14,7 @@ namespace Balmo;
 
 if (!defined('ABSPATH')) exit;
 
+use Balmo\Admin\AuditPage;
 use Balmo\Admin\ImportPage;
 use Balmo\Admin\MappingPage;
 use Balmo\Admin\SchedulerPage;
@@ -597,6 +598,7 @@ add_action('plugins_loaded', function (): void {
         SchedulerPage::init();
         HistoryPage::init();
         ToolsPage::init();
+        AuditPage::init();
         Settings::init();
     }
 });
