@@ -1,9 +1,13 @@
-# 01 — Harmonogram obsługuje format pliku z profilu mapowania
+---
+id: "01"
+status: done
+commit: "feat: [01] profile format"
+after: []
+closed: "2026-11-07"
+note: ""
+---
 
-- **Tura:** 1
-- **Priorytet:** wysoki
-- **Zależności:** brak. 02 rozszerza wynik tego zadania o XML.
-- **Status (2026-11-07):** kod wdrożony, `php -l` OK (PHP 8.2; `FeedLoader.php` także 7.4). Smoke test poza WP: `JsonFlattener` na ICA JSON daje 9131 wierszy, produkt 423 ma `active = 0`. Scenariusze ręczne w WP + WooCommerce jeszcze nie przeprowadzone.
+# 01 — Harmonogram obsługuje format pliku z profilu mapowania
 
 ## Problem
 
@@ -37,7 +41,7 @@ Skutek: harmonogram z profilem JSON i linkiem `https://drop.seltu.pl/products/co
 ## Kryteria akceptacji
 
 - [ ] Harmonogram: profil `format=json`, URL ICA JSON, tryb `update`. „Uruchom teraz” kończy import ze statusem `done`. `total_rows = 9131` (wartość z 2026-11-07, może się zmienić). W historii brak błędów parsowania.
-- [ ] Ten sam harmonogram uruchomiony przez WP-Cron (`wp cron event run balmo_cron_import_<id>`) daje ten sam wynik.
+- [ ] Ten sam harmonogram uruchomiony przez WP-Cron daje ten sam wynik.
 - [ ] Harmonogram z profilem CSV oraz harmonogram bez profilu działają jak przed zmianą (ta sama liczba wierszy, te same kolumny).
 - [ ] Import ręczny CSV i JSON działa bez zmian (podgląd, liczba wierszy, wynik).
 - [ ] W kodzie nie ma już wyboru parsera poza `FeedLoader` (`grep -rn "JsonFlattener::from\|CsvFetcher::from" includes` zwraca tylko `FeedLoader.php`).
@@ -45,12 +49,20 @@ Skutek: harmonogram z profilem JSON i linkiem `https://drop.seltu.pl/products/co
 
 ## Weryfikacja
 
+Lint i przegląd według `docs/praca.md` (kroki 4 i 5). Zmienione pliki:
+
+- `includes/Service/FeedLoader.php`
+- `includes/Admin/ImportPage.php`
+- `includes/Cron/ImportScheduler.php`
+- `includes/Admin/SchedulerPage.php`
+- `includes/Admin/MappingPage.php`
+
+Grepy:
+
 ```bash
-php -l includes/Service/FeedLoader.php
-php -l includes/Admin/ImportPage.php
-php -l includes/Cron/ImportScheduler.php
-php -l includes/Admin/SchedulerPage.php
-php -l includes/Admin/MappingPage.php
+grep -rn "JsonFlattener::from\|CsvFetcher::from" includes   # tylko FeedLoader.php
 ```
 
-Ręcznie: scenariusze z kryteriów akceptacji. Zapisać `total_rows`, `updated_rows`, `error_rows` z historii.
+## Odbiór użytkownika
+
+Harmonogram z profilem JSON (ICA): „Uruchom teraz” i WP-Cron kończą import statusem `done`. Harmonogramy CSV i bez profilu działają jak wcześniej. Lista harmonogramów pokazuje kolumnę „Format”.

@@ -275,13 +275,13 @@ jQuery(function ($) {
         $mapBody.append($row);
     }
 
-    // Auto-mapuj kolumny drop.seltu.pl (CSV lub JSON w zależności od wybranego formatu)
+    // Auto-mapuj kolumny drop.seltu.pl (CSV, JSON lub XML w zależności od wybranego formatu)
     $('#balmo-btn-automap').on('click', function () {
         if ($mapBody.find('tr').length > 0) {
             if (!confirm('Zastąpić istniejące mapowanie auto-mapą?')) return;
         }
         var format  = $('#balmo-mapping-format').val() || 'csv';
-        var autoMap = (format === 'json' ? window.balmoAutoMapJson : window.balmoAutoMap) || {};
+        var autoMap = (format === 'json' || format === 'xml' ? window.balmoAutoMapJson : window.balmoAutoMap) || {};
         $mapBody.empty();
         $.each(autoMap, function (csvCol, wcField) {
             addMappingRow(csvCol, wcField, '');

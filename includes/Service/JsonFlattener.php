@@ -7,12 +7,10 @@ if (!defined('ABSPATH')) exit;
 /**
  * Pobiera plik JSON Colibra i konwertuje go do CSV gotowego do importu.
  * Obsługuje struktury: [{...}] lub {"products":[{...}]}
- * Zdjęcia: "main_image" + "additional_images.image[]" lub "images[]" (uproszczony format).
- * Atrybuty produktu (atributes[]) są pomijane — nie obsługiwane w tej wersji.
+ * Spłaszczanie pojedynczego produktu robi FeedRowFlattener (wspólny z XmlFlattener).
  */
 class JsonFlattener
 {
-    private const MAX_ADDITIONAL = 6;  // additional_image_1 … additional_image_6
     private const MAX_FILE_SIZE  = 104857600; // 100 MB
     private const PREVIEW_ROWS   = 10;
 
@@ -120,7 +118,7 @@ class JsonFlattener
         $total_rows = 0;
 
         foreach ($products as $product) {
-            $flat = self::flatten($product);
+            $flat = FeedRowFlattener::flatten($product);
             $row  = [];
             foreach ($headers as $h) {
                 $row[] = $flat[$h] ?? '';
@@ -185,68 +183,13 @@ class JsonFlattener
     {
         $headers = [];
         foreach ($products as $product) {
-            foreach (array_keys(self::flatten($product)) as $key) {
+            foreach (array_keys(FeedRowFlattener::flatten($product)) as $key) {
                 if (!in_array($key, $headers, true)) {
                     $headers[] = $key;
                 }
             }
         }
         return $headers;
-    }
-
-    // Spłaszcz jeden produkt JSON do płaskiego array
-    private static function flatten(array $product): array
-    {
-        $flat = [];
-
-        foreach ($product as $key => $value) {
-            // "images": ["url1", "url2"] — format uproszczony (np. drop.seltu.pl)
-            if ($key === 'images' && is_array($value)) {
-                if (isset($value[0])) {
-                    $flat['main_image'] = (string) $value[0];
-                }
-                for ($i = 1; $i <= self::MAX_ADDITIONAL && isset($value[$i]); $i++) {
-                    $flat['additional_image_' . $i] = (string) $value[$i];
-                }
-                continue;
-            }
-
-            // "additional_images": {"image": [...]} lub {"image": "url"}
-            if ($key === 'additional_images' && is_array($value)) {
-                $imgs = [];
-                if (isset($value['image'])) {
-                    $imgs = is_array($value['image']) ? $value['image'] : [$value['image']];
-                } elseif (isset($value[0])) {
-                    $imgs = $value;
-                }
-                foreach ($imgs as $i => $img) {
-                    if ($i >= self::MAX_ADDITIONAL) break;
-                    $flat['additional_image_' . ($i + 1)] = (string) $img;
-                }
-                continue;
-            }
-
-            // Atrybuty — pomijamy
-            if (in_array($key, ['atributes', 'attributes'], true)) {
-                continue;
-            }
-
-            // Booleany: true → "1", false → "0"
-            if (is_bool($value)) {
-                $flat[$key] = $value ? '1' : '0';
-                continue;
-            }
-
-            // Skalary
-            if (!is_array($value)) {
-                $flat[$key] = (string) $value;
-                continue;
-            }
-
-            // Inne zagnieżdżone struktury — pomiń
-        }
-
-        return $flat;
     }
 
     private static function tempPath(string $ext): string

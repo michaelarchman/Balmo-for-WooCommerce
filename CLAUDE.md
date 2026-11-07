@@ -1,81 +1,86 @@
-# CLAUDE.md
+# Balmo for WooCommerce
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Wtyczka WordPress/WooCommerce do masowego importu produktów z feedów hurtowni (CSV, JSON, XML),
+z importem w transzach i harmonogramem. Ten plik **kieruje** i trzyma reguły twarde. Szczegóły
+mają jedno miejsce w `docs/`.
 
-## Project Overview
+`CLAUDE.md` i `AGENTS.md` są **bliźniacze (1:1)**: każdy agent (Claude Code, Codex) dostaje na
+starcie te same reguły. Zmieniasz regułę w jednym, aktualizujesz oba.
 
-Balmo is a WordPress plugin for WooCommerce that automates bulk product imports from CSV files. It handles large catalogs (20,000+ products) via batch/async processing with scheduled recurring imports.
+## Odpowiadaj po polsku
 
-**Requirements:** PHP 7.4+, WordPress 5.0+, WooCommerce 4.0+, Action Scheduler (bundled with WooCommerce).
+Rozmowa, dokumenty w `docs/` i pliki zadań w `tasks/` są po polsku. Commity są po angielsku.
+W kodzie obowiązuje to, co już jest w repo: komentarze i teksty UI po polsku, przez `__()`
+z text domain `balmo`.
 
-## Commands
+## Styl odpowiedzi: caveman
 
-No Composer, npm, or PHPUnit scripts. Syntax checks only:
+Zanim odpowiesz cokolwiek, czytasz `.claude/skills/caveman/SKILL.md` i trzymasz ten styl przez
+całą sesję, poziom `full`, aż użytkownik napisze „stop caveman” albo „normal mode”. Wynik przed
+uzasadnieniem, bez preambuły, bez relacjonowania wywołań narzędzi. Styl dotyczy rozmowy: kod,
+commity, dokumenty i zadania piszesz normalną prozą.
 
-```bash
-php -l ./balmo.php
-php -l ./includes/Service/ProductImporter.php
-```
+## Przepływ: skąd dokąd czytasz
 
-Testing is manual via a local WordPress + WooCommerce install. After changing cron or batch logic, verify both manual import and scheduled import paths through the Balmo admin screens.
-
-## Architecture
-
-**Entry point:** `balmo.php` — defines constants, PSR-4 autoloader (`Balmo\*` → `includes/`), DB schema on activation, and all WP hook registrations.
-
-**Key constants (balmo.php):**
-- `BALMO_BATCH_SIZE` = 200 rows/batch (full/sync imports)
-- `BALMO_ASYNC_BATCH_SIZE` = 25 rows/batch (background/cron)
-- `BALMO_BATCH_TIME_LIMIT` = 20 seconds
-- `BALMO_HEARTBEAT_TTL` = 180 seconds (stall detection)
-
-**Layer structure:**
+Czytanie idzie w jedną stronę, w dół:
 
 ```
-includes/Admin/     — wp-admin screens + AJAX handlers
-includes/Service/   — CSV fetch, validate, map, import logic
-includes/Cron/      — WP-Cron schedule management
-assets/             — admin.js (AJAX wizard + polling), admin.css
+CLAUDE.md / AGENTS.md          <- każda sesja zaczyna tutaj
+        |
+        v
+docs/README.md                 <- rozdzielnia dokumentów
+        |
+        +- docs/praca.md         role, przepływ zadania, format zadania i commita
+        +- docs/architektura.md  kod wtyczki i konwencje kodowania
+        +- docs/feedy-seltu.md   dane i decyzje o feedach drop.seltu.pl
+        |
+        v
+tasks/README.md                <- kolejka i statusy zadań
+        |
+        v
+tasks/NN-<slug>.md             <- jedno zadanie, samodzielne
 ```
 
-**Core classes:**
-- `Balmo\Admin\ImportPage` — CSV upload/URL fetch wizard, preview, step-by-step AJAX flow
-- `Balmo\Admin\MappingPage` — Column mapping profiles (stored as JSON in DB)
-- `Balmo\Admin\SchedulerPage` — Recurring schedule CRUD
-- `Balmo\Admin\HistoryPage` — Import log viewer with per-row error details
-- `Balmo\Service\ProductImporter` — Batch processor: creates/updates WC products from mapped rows
-- `Balmo\Service\ColumnMapper` — Maps CSV columns → WooCommerce fields, applies overrides and price formulas
-- `Balmo\Service\CsvFetcher` — Download (URL) or store (upload) CSV to `wp-uploads/balmo/`
-- `Balmo\Service\CsvValidator` — Auto-detects delimiter (`,;|\t`), validates headers/types
-- `Balmo\Service\PriceFormula` — Safe tokenized formula evaluator (no `eval()`); supports `{price}`, `{vat}` vars and math functions
-- `Balmo\Cron\ImportScheduler` — Registers WP-Cron schedules; `execute()` fetches CSV and enqueues batches
+1. **Reguła ma jedno miejsce.** Niższy poziom linkuje albo cytuje, nie kopiuje. Jedyny wyjątek:
+   ten plik i `AGENTS.md`.
+2. **Zadanie jest samodzielne.** Regułę, która ma dotrzeć do wykonawcy, mózg cytuje w treści
+   zadania.
+3. **Dokument kontra kod: rację ma kod.** Rozjazd zgłaszasz i poprawiasz dokument, nie kod.
 
-**Import flow:**
-1. CsvFetcher → CsvValidator → preview in ImportPage
-2. User selects/creates mapping profile in MappingPage
-3. Import logged to `balmo_import_log` (status: `pending`)
-4. Batches dispatched via Action Scheduler (`balmo_as_batch` action in `balmo.php`)
-5. Each batch: ColumnMapper applies overrides/formula → ProductImporter creates/updates WC product → row errors → `balmo_import_errors`
-6. Next batch auto-queued until all rows done; heartbeat transients detect stalls
+Zaczynasz od `tasks/README.md`: tam jest, na czym stanęliśmy.
 
-**Database tables** (created on plugin activation):
-- `{prefix}balmo_import_log` — one row per import run; tracks status, counts, offset, file path
-- `{prefix}balmo_import_errors` — per-row errors with row data and message
-- `{prefix}balmo_mappings` — mapping profiles with `column_map`, `overrides`, `price_formula` as JSON
+## Role
 
-## Agent Skills
+Pełny opis: `docs/praca.md`. W skrócie:
 
-Shared skills live in `.claude/skills/` (see its `README.md`). `caveman` is mandatory: invoke it at the start of every session and keep its response style until the user says "stop caveman" or "normal mode". Code, comments, commits, and docs stay in normal prose.
+| Krok | Kto | Co robi |
+|---|---|---|
+| 1 | użytkownik | pisze, co dolega i co zrobić |
+| 2 | mózg (mocny model, sesja rozmowy) | review kodu, potem pisze zadania |
+| 3 | wykonawca (średni model) | wykonuje zadanie po „Wykonaj” |
+| 4 | kontroler (słaby model) | lint i błędy logiczne w diffie |
+| 5 | wykonawca (średni model) | review własnego diffu, poprawki |
+| 6 | tester (słaby model) | uruchamia testy, **tylko jeśli są napisane** |
+| 7 | mózg | podaje commit message z nagłówka zadania |
+| 8 | użytkownik | commituje, sprawdza, testuje w przeglądarce |
 
-For code work use `investigate-first` (read before editing), `surgical-patch` (smallest fix at the right layer), `safe-refactor`, `lean-build`, `migration`, and `verify-and-stop` (verify, then stop). Use `caveman-commit` for commit messages and `caveman-review` for reviews.
+## Reguły twarde
 
-## Coding Conventions
+Obowiązują każdą sesję i każdą rolę:
 
-Follow AGENTS.md exactly:
-- 4-space indent, braces on next line for classes/functions
-- Typed properties, early returns for guard clauses
-- `PascalCase` classes, `camelCase` methods, `UPPER_SNAKE_CASE` constants
-- File name must match class name (e.g., `includes/Service/CsvFetcher.php`)
-- Always sanitize input, escape output, check `manage_woocommerce` capability on all admin actions
-- Use `__()` / `esc_html__()` with text domain `balmo` for all user-facing strings
-- Treat CSV URLs, uploaded files, and mapped values as untrusted input
+1. **Kod tylko po „Wykonaj”.** Do tego czasu mózg robi review, analizuje i pisze zadania.
+   „Zacznij”, „zrób”, „następne” bez „Wykonaj” oznacza pracę nad plikami zadań.
+2. **Nie commitujesz.** Żadnego `git commit`, `git add`, `git push`, `git tag`. Na końcu podajesz
+   gotową komendę commita z nagłówka zadania, bez `Co-Authored-By` i bez atrybucji modelu.
+3. **Nie testujesz i nie stawiasz środowiska.** Bez Dockera, bez WordPressa, bez instalowania
+   PHP czy innych narzędzi, bez skryptów „smoke”, bez atrap i bez pobierania feedów w celu
+   sprawdzenia kodu. Testy w przeglądarce robi użytkownik.
+4. **Nie raportujesz braków środowiska.** Nie piszesz, czego nie sprawdziłeś, bo nie ma testów
+   albo środowiska. Zgłaszasz tylko realne blokady zakresu i decyzje do podjęcia.
+5. **Robisz tylko swoją rolę.** Wykonawca nie poszerza zakresu, kontroler nie poprawia kodu,
+   tester nie pisze testów.
+
+## Jedna reguła przed wszystkimi
+
+Mówiąc o zadaniu, podajesz ścieżkę pliku od katalogu repo, np. `tasks/02-import-xml.md`, nie sam
+numer.

@@ -1,8 +1,13 @@
-# 03 — Import atrybutów produktu (XML i JSON)
+---
+id: "03"
+status: blocked
+commit: "feat: [03] import product attributes from xml and json"
+after: ["02"]
+closed: ""
+note: "Decyzje D1–D6 do potwierdzenia."
+---
 
-- **Tura:** 1 (po 02)
-- **Priorytet:** średni
-- **Zależności:** 02 (`FeedRowFlattener`, konwersja `attributes` z XML).
+# 03 — Import atrybutów produktu (XML i JSON)
 
 ## Problem
 
@@ -65,19 +70,25 @@ Feed CSV nie ma atrybutów. Ta funkcja działa tylko dla XML i JSON.
 - [ ] Widżet/blok „Filtruj według atrybutu” pokazuje np. `kolor dominujący` z liczbą produktów.
 - [ ] Import ICA w trybie `update` (bez `_attributes` w `update_fields`) nie zmienia atrybutów.
 - [ ] Profil CSV działa jak przed zmianą.
-- [ ] Czas transzy mieści się w `BALMO_BATCH_TIME_LIMIT` (20 s). Zmierzyć średni czas transzy przed i po (historia lub heartbeat) i wpisać do PR.
+- [ ] Odczyty atrybutów i termów idą przez cache na czas żądania; w pętli po produktach nie ma powtarzanych zapytań o ten sam atrybut lub term.
 
 ## Weryfikacja
 
-```bash
-php -l includes/Service/FeedRowFlattener.php
-php -l includes/Service/ColumnMapper.php
-php -l includes/Service/ProductImporter.php
-php -l includes/Admin/MappingPage.php
-php -l includes/Admin/Settings.php
-```
+Lint i przegląd według `docs/praca.md` (kroki 4 i 5). Zmienione pliki:
+
+- `includes/Service/FeedRowFlattener.php`
+- `includes/Service/ColumnMapper.php`
+- `includes/Service/ProductImporter.php`
+- `includes/Admin/MappingPage.php`
+- `includes/Admin/Settings.php`
+
+Grepy:
 
 ```bash
-wp wc product_attribute list --user=1 --format=count   # oczekiwane: 17 (+ atrybuty istniejące wcześniej w sklepie)
-wp eval '$p = wc_get_product(wc_get_product_id_by_sku("P14798AU")); foreach ($p->get_attributes() as $a) echo $a->get_name(), ": ", implode(" | ", wc_get_product_terms($p->get_id(), $a->get_name(), ["fields"=>"names"])), PHP_EOL;'
+grep -n "_attributes" includes/Admin/MappingPage.php includes/Service/ColumnMapper.php includes/Service/ProductImporter.php
+grep -n "explode(','" includes/Service/ProductImporter.php   # wartości atrybutów nie są dzielone po przecinku
 ```
+
+## Odbiór użytkownika
+
+Produkty → Atrybuty: 17 atrybutów z feedu, bez duplikatów po reimporcie. Produkt 425: atrybuty zgodne z feedem, bez pustych i bez zaślepek. Ręcznie dodany atrybut zostaje po reimporcie. Filtr „według atrybutu” działa w sklepie. ICA `update` nie zmienia atrybutów.

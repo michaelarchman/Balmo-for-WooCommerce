@@ -1,26 +1,86 @@
-# Repository Guidelines
+# Balmo for WooCommerce
 
-## Project Structure & Module Organization
-`balmo.php` is the plugin bootstrap: it defines constants, registers the autoloader, creates database tables, and wires WordPress hooks. Keep PHP classes under `includes/` with PSR-4 style paths that match the `Balmo\...` namespace. Use `includes/Admin/` for wp-admin screens, `includes/Service/` for CSV import and mapping logic, and `includes/Cron/` for scheduled import flow. Store admin-only frontend assets in `assets/` (`admin.js`, `admin.css`).
+Wtyczka WordPress/WooCommerce do masowego importu produktów z feedów hurtowni (CSV, JSON, XML),
+z importem w transzach i harmonogramem. Ten plik **kieruje** i trzyma reguły twarde. Szczegóły
+mają jedno miejsce w `docs/`.
 
-## Build, Test, and Development Commands
-This plugin does not expose Composer, npm, or PHPUnit scripts in the current checkout. Use targeted local checks instead:
+`CLAUDE.md` i `AGENTS.md` są **bliźniacze (1:1)**: każdy agent (Claude Code, Codex) dostaje na
+starcie te same reguły. Zmieniasz regułę w jednym, aktualizujesz oba.
 
-```powershell
-php -l .\balmo.php
-php -l .\includes\Service\ProductImporter.php
+## Odpowiadaj po polsku
+
+Rozmowa, dokumenty w `docs/` i pliki zadań w `tasks/` są po polsku. Commity są po angielsku.
+W kodzie obowiązuje to, co już jest w repo: komentarze i teksty UI po polsku, przez `__()`
+z text domain `balmo`.
+
+## Styl odpowiedzi: caveman
+
+Zanim odpowiesz cokolwiek, czytasz `.claude/skills/caveman/SKILL.md` i trzymasz ten styl przez
+całą sesję, poziom `full`, aż użytkownik napisze „stop caveman” albo „normal mode”. Wynik przed
+uzasadnieniem, bez preambuły, bez relacjonowania wywołań narzędzi. Styl dotyczy rozmowy: kod,
+commity, dokumenty i zadania piszesz normalną prozą.
+
+## Przepływ: skąd dokąd czytasz
+
+Czytanie idzie w jedną stronę, w dół:
+
+```
+CLAUDE.md / AGENTS.md          <- każda sesja zaczyna tutaj
+        |
+        v
+docs/README.md                 <- rozdzielnia dokumentów
+        |
+        +- docs/praca.md         role, przepływ zadania, format zadania i commita
+        +- docs/architektura.md  kod wtyczki i konwencje kodowania
+        +- docs/feedy-seltu.md   dane i decyzje o feedach drop.seltu.pl
+        |
+        v
+tasks/README.md                <- kolejka i statusy zadań
+        |
+        v
+tasks/NN-<slug>.md             <- jedno zadanie, samodzielne
 ```
 
-Run the plugin inside a local WordPress + WooCommerce install and validate from the Balmo admin screens. After changing cron or batch logic, test both manual import and scheduled import paths.
+1. **Reguła ma jedno miejsce.** Niższy poziom linkuje albo cytuje, nie kopiuje. Jedyny wyjątek:
+   ten plik i `AGENTS.md`.
+2. **Zadanie jest samodzielne.** Regułę, która ma dotrzeć do wykonawcy, mózg cytuje w treści
+   zadania.
+3. **Dokument kontra kod: rację ma kod.** Rozjazd zgłaszasz i poprawiasz dokument, nie kod.
 
-## Coding Style & Naming Conventions
-Follow the existing PHP style: 4-space indentation, braces on the next line for classes/functions, typed properties where supported, and early returns for guard clauses. Class names use `PascalCase`; methods use `camelCase`; constants use `UPPER_SNAKE_CASE`. Keep WordPress capability checks, sanitization, escaping, and translation helpers (`__()`, `esc_html__()`) in place. Match new file names to their class names, for example `includes/Service/CsvFetcher.php`.
+Zaczynasz od `tasks/README.md`: tam jest, na czym stanęliśmy.
 
-## Testing Guidelines
-There is no automated test suite here, so rely on syntax checks and manual verification. Exercise CSV upload, column mapping, formula handling, product create/update behavior, and log/history views. For scheduler changes, verify WP-Cron registration and that import batches advance without leaving rows stuck in `pending` or `running`.
+## Role
 
-## Commit & Pull Request Guidelines
-Git history is not available in this plugin folder, so no local commit convention can be inferred. Use short, imperative commit subjects such as `Add CSV delimiter validation` and keep each commit scoped to one change. PRs should summarize the user-visible behavior, note any database or cron impact, include manual test steps, and add screenshots for admin UI changes.
+Pełny opis: `docs/praca.md`. W skrócie:
 
-## Security & Configuration Tips
-Treat CSV URLs, uploaded files, and mapped values as untrusted input. Sanitize on input, escape on output, and preserve capability checks around admin actions. Do not commit environment-specific paths, secrets, or exported customer/product data.
+| Krok | Kto | Co robi |
+|---|---|---|
+| 1 | użytkownik | pisze, co dolega i co zrobić |
+| 2 | mózg (mocny model, sesja rozmowy) | review kodu, potem pisze zadania |
+| 3 | wykonawca (średni model) | wykonuje zadanie po „Wykonaj” |
+| 4 | kontroler (słaby model) | lint i błędy logiczne w diffie |
+| 5 | wykonawca (średni model) | review własnego diffu, poprawki |
+| 6 | tester (słaby model) | uruchamia testy, **tylko jeśli są napisane** |
+| 7 | mózg | podaje commit message z nagłówka zadania |
+| 8 | użytkownik | commituje, sprawdza, testuje w przeglądarce |
+
+## Reguły twarde
+
+Obowiązują każdą sesję i każdą rolę:
+
+1. **Kod tylko po „Wykonaj”.** Do tego czasu mózg robi review, analizuje i pisze zadania.
+   „Zacznij”, „zrób”, „następne” bez „Wykonaj” oznacza pracę nad plikami zadań.
+2. **Nie commitujesz.** Żadnego `git commit`, `git add`, `git push`, `git tag`. Na końcu podajesz
+   gotową komendę commita z nagłówka zadania, bez `Co-Authored-By` i bez atrybucji modelu.
+3. **Nie testujesz i nie stawiasz środowiska.** Bez Dockera, bez WordPressa, bez instalowania
+   PHP czy innych narzędzi, bez skryptów „smoke”, bez atrap i bez pobierania feedów w celu
+   sprawdzenia kodu. Testy w przeglądarce robi użytkownik.
+4. **Nie raportujesz braków środowiska.** Nie piszesz, czego nie sprawdziłeś, bo nie ma testów
+   albo środowiska. Zgłaszasz tylko realne blokady zakresu i decyzje do podjęcia.
+5. **Robisz tylko swoją rolę.** Wykonawca nie poszerza zakresu, kontroler nie poprawia kodu,
+   tester nie pisze testów.
+
+## Jedna reguła przed wszystkimi
+
+Mówiąc o zadaniu, podajesz ścieżkę pliku od katalogu repo, np. `tasks/02-import-xml.md`, nie sam
+numer.

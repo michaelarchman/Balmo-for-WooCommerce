@@ -11,7 +11,7 @@ if (!defined('ABSPATH')) exit;
  */
 class FeedLoader
 {
-    public const FORMATS = ['csv', 'json'];
+    public const FORMATS = ['csv', 'json', 'xml'];
 
     /**
      * Pobierz plik z URL i przygotuj CSV do importu.
@@ -20,8 +20,11 @@ class FeedLoader
      */
     public static function fromUrl(string $url, string $source_type, string $format)
     {
-        if (self::normalizeFormat($format) === 'json') {
-            return JsonFlattener::fromUrl($url, $source_type);
+        switch (self::normalizeFormat($format)) {
+            case 'json':
+                return JsonFlattener::fromUrl($url, $source_type);
+            case 'xml':
+                return XmlFlattener::fromUrl($url, $source_type);
         }
 
         return CsvFetcher::fromUrl($url, $source_type);
@@ -34,8 +37,11 @@ class FeedLoader
      */
     public static function fromUpload(array $file, string $source_type, string $format)
     {
-        if (self::normalizeFormat($format) === 'json') {
-            return JsonFlattener::fromUpload($file, $source_type);
+        switch (self::normalizeFormat($format)) {
+            case 'json':
+                return JsonFlattener::fromUpload($file, $source_type);
+            case 'xml':
+                return XmlFlattener::fromUpload($file, $source_type);
         }
 
         return CsvFetcher::fromUpload($file, $source_type);

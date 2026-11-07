@@ -248,8 +248,9 @@ class MappingPage
                         <select id="balmo-mapping-format">
                             <option value="csv" <?php selected($format, 'csv'); ?>><?php esc_html_e('CSV', 'balmo'); ?></option>
                             <option value="json" <?php selected($format, 'json'); ?>><?php esc_html_e('JSON', 'balmo'); ?></option>
+                            <option value="xml" <?php selected($format, 'xml'); ?>><?php esc_html_e('XML', 'balmo'); ?></option>
                         </select>
-                        <p class="description"><?php esc_html_e('JSON zostanie automatycznie skonwertowany do CSV przed importem.', 'balmo'); ?></p>
+                        <p class="description"><?php esc_html_e('JSON i XML zostaną automatycznie skonwertowane do CSV przed importem.', 'balmo'); ?></p>
                     </td>
                 </tr>
                 <tr>

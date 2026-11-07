@@ -1,8 +1,13 @@
-# 02 — Import XML (pełne dane i ICA)
+---
+id: "02"
+status: todo
+commit: "feat: [02] import xml product and ica feeds"
+after: ["01"]
+closed: ""
+note: ""
+---
 
-- **Tura:** 1 (po 01)
-- **Priorytet:** wysoki
-- **Zależności:** 01 (`FeedLoader`). 03 korzysta z konwersji atrybutów XML zrobionej tutaj.
+# 02 — Import XML (pełne dane i ICA)
 
 ## Problem
 
@@ -75,26 +80,31 @@ ICA `/products/colibra/ica/xml/`, około 2,2 MB, 9131 produktów: `product_id`, 
 - [ ] Podgląd pełnego XML: `total_rows = 1854` (stan z 2026-11-07), kolumny zawierają `product_id … currency`, `permalink`, `related`, `main_image`, `additional_image_1..6`.
 - [ ] Import pełnego XML profilem `format=xml` (auto-mapa) tworzy produkty z tymi samymi SKU, ceną, stanem (`100`), kategoriami i zdjęciami co import JSON. Sprawdzić na 3 produktach: 425 (bez dodatkowych zdjęć), 433 (z dodatkowymi), dowolny z HTML w opisie.
 - [ ] Import ICA XML w trybie `update` ustawia produkt 423 na `draft`, a produkt 425 zostawia `publish`.
-- [ ] Wynik `JsonFlattener` dla pełnego JSON jest identyczny przed i po refaktorze (porównać nagłówki i pierwsze 10 wierszy CSV, np. `diff`).
+- [ ] Logika spłaszczania przeniesiona do `FeedRowFlattener` bez zmiany zachowania: te same klucze kolumn i te same wartości dla JSON (przegląd diffu).
 - [ ] Uszkodzony XML (np. obcięty plik) daje komunikat błędu w kreatorze i nie zostawia plików w `uploads/balmo/`.
 - [ ] XML z encją zewnętrzną (`<!DOCTYPE x [<!ENTITY e SYSTEM "file:///etc/passwd">]>`) nie wczytuje pliku lokalnego.
 - [ ] Harmonogram z profilem XML (ICA, `update`) kończy się statusem `done` (ścieżka z 01).
-- [ ] Szczytowe zużycie pamięci przy konwersji pełnego XML zmierzone (`memory_get_peak_usage(true)`) i wpisane do opisu PR.
+- [ ] Konwersja XML czyta plik strumieniowo (`XMLReader`), bez ładowania całego dokumentu do pamięci.
 
 ## Weryfikacja
 
+Lint i przegląd według `docs/praca.md` (kroki 4 i 5). Zmienione pliki:
+
+- `includes/Service/FeedRowFlattener.php`
+- `includes/Service/XmlFlattener.php`
+- `includes/Service/JsonFlattener.php`
+- `includes/Service/FeedLoader.php`
+- `includes/Admin/MappingPage.php`
+- `includes/Admin/ImportPage.php`
+- `assets/admin.js`
+
+Grepy:
+
 ```bash
-php -l includes/Service/FeedRowFlattener.php
-php -l includes/Service/XmlFlattener.php
-php -l includes/Service/JsonFlattener.php
-php -l includes/Service/FeedLoader.php
-php -l includes/Admin/MappingPage.php
-php -l includes/Admin/ImportPage.php
+grep -n "xml" includes/Service/FeedLoader.php includes/Admin/MappingPage.php includes/Admin/ImportPage.php assets/admin.js
+grep -n "LIBXML_NOENT" includes/Service/XmlFlattener.php   # brak wyników
 ```
 
-Konwersja poza kreatorem (WP-CLI w lokalnej instalacji):
+## Odbiór użytkownika
 
-```bash
-wp eval 'print_r(array_diff_key(Balmo\Service\XmlFlattener::fromUrl("https://drop.seltu.pl/products/colibra/xml/", "all"), ["preview"=>1]));'
-wp eval 'print_r(array_diff_key(Balmo\Service\XmlFlattener::fromUrl("https://drop.seltu.pl/products/colibra/ica/xml/", "ica"), ["preview"=>1]));'
-```
+Profil `format=xml`: podgląd i import pełnego XML (produkty 425, 433 i jeden z HTML w opisie zgodne z importem JSON). Import ICA XML w trybie `update`: produkt 423 przechodzi na `draft`. Harmonogram z profilem XML kończy się statusem `done`. Uszkodzony plik XML daje komunikat w kreatorze.

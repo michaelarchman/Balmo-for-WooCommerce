@@ -56,8 +56,8 @@ class ImportPage
                     <tr>
                         <th><?php esc_html_e('Prześlij plik', 'balmo'); ?></th>
                         <td>
-                            <input type="file" id="balmo_csv_file" accept=".csv,.txt,.json">
-                            <p class="description"><?php esc_html_e('CSV lub JSON — format określa wybrany profil mapowania.', 'balmo'); ?></p>
+                            <input type="file" id="balmo_csv_file" accept=".csv,.txt,.json,.xml">
+                            <p class="description"><?php esc_html_e('CSV, JSON lub XML — format określa wybrany profil mapowania.', 'balmo'); ?></p>
                         </td>
                     </tr>
                     <tr>
