@@ -20,6 +20,7 @@ use Balmo\Admin\SchedulerPage;
 use Balmo\Admin\HistoryPage;
 use Balmo\Admin\Settings;
 use Balmo\Cron\ImportScheduler;
+use Balmo\Service\Integration;
 
 define('BALMO_MIN_PHP', '8.3');
 
@@ -173,6 +174,7 @@ function activate(): void
             group_variants TINYINT(1)      NOT NULL DEFAULT 0,
             variant_suffixes TEXT          NULL,
             source_currency VARCHAR(3)     NOT NULL DEFAULT '',
+            integration_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
             created_at    DATETIME         NOT NULL DEFAULT CURRENT_TIMESTAMP,
             updated_at    DATETIME         NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             PRIMARY KEY (id)
@@ -192,7 +194,7 @@ function activate(): void
     add_option('balmo_image_mode',       'none');
     add_option('balmo_default_status',   'publish');
     add_option('balmo_log_retention',    30);
-    update_option('balmo_db_version',    '1.5');
+    update_option('balmo_db_version',    '1.6');
 }
 register_activation_hook(BALMO_PLUGIN_FILE, __NAMESPACE__ . '\activate');
 
@@ -261,7 +263,12 @@ function maybe_migrate_db(): void
         $wpdb->query("ALTER TABLE `" . table_mappings() . "` ADD COLUMN `source_currency` VARCHAR(3) NOT NULL DEFAULT ''");
     }
 
-    update_option('balmo_db_version', '1.5');
+    // Existing profiles get 0 (no integration) until edited
+    if (!in_array('integration_id', $mappings_cols, true)) {
+        $wpdb->query("ALTER TABLE `" . table_mappings() . "` ADD COLUMN `integration_id` BIGINT UNSIGNED NOT NULL DEFAULT 0");
+    }
+
+    update_option('balmo_db_version', '1.6');
 }
 
 function get_background_batch_size(): int
@@ -562,6 +569,7 @@ add_action('plugins_loaded', function (): void {
     }
 
     ImportScheduler::init();
+    Integration::register(); // Outside is_admin(): cron and Action Scheduler tag products
 
     if (is_admin()) {
         ImportPage::init();

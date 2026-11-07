@@ -314,6 +314,10 @@ jQuery(function ($) {
         });
     });
 
+    $('#balmo-mapping-integration').on('change', function () {
+        $('#balmo-mapping-integration-new').toggle($(this).val() === 'new');
+    });
+
     $('#balmo-btn-save-mapping').on('click', function () {
         var id          = $('#balmo-mapping-id').val();
         var name            = $('#balmo-mapping-name').val().trim();
@@ -324,6 +328,8 @@ jQuery(function ($) {
         var sourceCurrency  = $('#balmo-source-currency').val();
         var groupVariants   = $('#balmo-group-variants').is(':checked') ? 1 : 0;
         var variantSuffixes = $('#balmo-variant-suffixes').val();
+        var integrationId   = $('#balmo-mapping-integration').val();
+        var integrationNew  = $('#balmo-mapping-integration-new').val().trim();
 
         if (!name) { alert('Podaj nazwę profilu.'); return; }
 
@@ -365,7 +371,9 @@ jQuery(function ($) {
             update_fields:    updateFields,
             source_currency:  sourceCurrency,
             group_variants:   groupVariants,
-            variant_suffixes: variantSuffixes
+            variant_suffixes: variantSuffixes,
+            integration_id:   integrationId,
+            integration_new:  integrationNew
         }, function (res) {
             if (res.success) {
                 if (typeof res.data.id !== 'undefined') {

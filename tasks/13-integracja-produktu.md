@@ -1,11 +1,11 @@
 ---
 id: "13"
-status: blocked
+status: done
 commit: "feat: [13] tag products with their integration"
 model: średni
 after: []
-closed: ""
-note: "Decyzje D1–D5 do potwierdzenia."
+closed: "2026-11-07"
+note: ""
 ---
 
 # 13 — Integracja (dostawca) produktu

@@ -34,6 +34,13 @@
 | `BALMO_HEARTBEAT_TTL` | 180 s (wykrywanie zawieszenia) |
 | `BALMO_MAX_GALLERY_IMAGES` | 12 zdjęć dodatkowych (pola `_gallery_image_2` … `_gallery_image_13`, `additional_image_1` … `additional_image_12`) |
 
+## Pojęcia
+
+| Pojęcie | Znaczenie |
+|---|---|
+| integracja | nazwany dostawca produktów (np. `Colibra`). Term taksonomii `balmo_integration` |
+| profil | sposób czytania jednego feedu (`balmo_mappings`). Należy do jednej integracji (`integration_id`). Jedna integracja = wiele profili |
+
 ## Klasy
 
 | Klasa | Robi |
@@ -52,6 +59,7 @@
 | `Service\ColumnMapper` | wiersz → pola WC, nadpisania, formuła ceny, prefiks URL zdjęć |
 | `Service\PriceFormula` | formuły bez `eval()`, zmienne `{price}`, `{vat}` |
 | `Service\ProductImporter` | transza: create/update produktu, kategorie, atrybuty globalne (`pa_*`, meta `_balmo_attribute_taxonomies`), grupowanie wariantów (produkt variable + `WC_Product_Variation`, opcja profilu `group_variants`), zdjęcia zewnętrzne, błędy |
+| `Service\Integration` | taksonomia `balmo_integration` (`register()` poza `is_admin()`); `forMapping()` = term profilu; `tag()` = term + meta importu; `terms()` = lista; filtr „Integracja” na liście Produkty |
 | `Service\RelatedResolver` | po imporcie pełnym: meta `_balmo_related_ext` (ID hurtowni) → `_upsell_ids`; akcja AS `balmo_resolve_related`, porcje po 200 |
 | `Cron\ImportScheduler` | harmonogramy w opcji `balmo_schedules`, `execute()` |
 
@@ -67,14 +75,26 @@
 6. Dopasowanie produktu: SKU (`product_code`) albo meta `_product_id_ext`.
 7. Tryb `update`: bez tworzenia produktów, tylko pola z `update_fields`.
 
+## Taksonomia i meta integracji
+
+| Element | Wartość |
+|---|---|
+| taksonomia `balmo_integration` | produkt i wariacja; prywatna (`public => false`, bez archiwum, URL, REST); UI tylko wp-admin: Produkty → Integracje, kolumna i filtr na liście Produkty; jeden term na produkt |
+| meta `_balmo_last_import` | ID importu, który ostatnio dopasował produkt |
+| meta `_balmo_created_import` | ID importu, który utworzył produkt |
+| tagowanie | `ProductImporter`: `createProduct`, `updateProduct`, `saveVariation`, `updateVariation` (rodzic), `createVariantProduct` (rodzic); tryb `update` też tagowany niezależnie od `update_fields` |
+| profil z `integration_id = 0` | import bez termu; meta importu zapisywane |
+| produkt bez termu | „Bez integracji” |
+
 ## Tabele
 
 | Tabela | Zawiera |
 |---|---|
 | `{prefix}balmo_import_log` | import: status, liczniki, offsety, plik, separator, `variant_bases` (kody bazowe par wariantów) |
 | `{prefix}balmo_import_errors` | błąd wiersza: numer, dane (max 10 pól), komunikat |
-| `{prefix}balmo_mappings` | profil: `format`, `source_type`, `image_url_prefix`, `column_map`, `overrides`, `price_formula`, `match_by`, `update_fields`, `group_variants`, `variant_suffixes`, `source_currency` |
+| `{prefix}balmo_mappings` | profil: `format`, `source_type`, `image_url_prefix`, `column_map`, `overrides`, `price_formula`, `match_by`, `update_fields`, `group_variants`, `variant_suffixes`, `source_currency`, `integration_id` (term_id `balmo_integration`, `0` = brak) |
 
+- `balmo_db_version` = `1.6`.
 - Zmiana schematu: `dbDelta` w `balmo.php`, domyślne wartości = obecne zachowanie.
 
 ## Konwencje kodu

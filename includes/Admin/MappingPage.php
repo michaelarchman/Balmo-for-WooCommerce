@@ -4,6 +4,8 @@ namespace Balmo\Admin;
 
 if (!defined('ABSPATH')) exit;
 
+use Balmo\Service\Integration;
+
 class MappingPage
 {
     // WooCommerce fields available for mapping (without extra images, added by wcFields())
@@ -154,7 +156,8 @@ class MappingPage
             "SELECT * FROM " . \Balmo\table_mappings() . " ORDER BY name ASC"
         ) ?: [];
 
-        $new_url = admin_url('admin.php?page=balmo-mapping&action=new');
+        $integrations = Integration::terms();
+        $new_url      = admin_url('admin.php?page=balmo-mapping&action=new');
         ?>
         <div class="wrap">
             <h1 class="wp-heading-inline"><?php esc_html_e('Profile mapowania', 'balmo'); ?></h1>
@@ -172,6 +175,7 @@ class MappingPage
                     <thead>
                         <tr>
                             <th><?php esc_html_e('Nazwa', 'balmo'); ?></th>
+                            <th><?php esc_html_e('Integracja', 'balmo'); ?></th>
                             <th><?php esc_html_e('Format', 'balmo'); ?></th>
                             <th><?php esc_html_e('Typ', 'balmo'); ?></th>
                             <th><?php esc_html_e('Dopasowanie', 'balmo'); ?></th>
@@ -186,6 +190,13 @@ class MappingPage
                         ?>
                             <tr>
                                 <td><a href="<?php echo esc_url($edit_url); ?>"><strong><?php echo esc_html($m->name); ?></strong></a></td>
+                                <td>
+                                    <?php if (isset($integrations[(int) ($m->integration_id ?? 0)])): ?>
+                                        <?php echo esc_html($integrations[(int) $m->integration_id]); ?>
+                                    <?php else: ?>
+                                        <em><?php esc_html_e('brak', 'balmo'); ?></em>
+                                    <?php endif; ?>
+                                </td>
                                 <td><?php echo esc_html(strtoupper($m->format ?? 'csv')); ?></td>
                                 <td><?php echo esc_html(strtoupper($m->source_type)); ?></td>
                                 <td><?php echo esc_html($m->match_by === 'sku' ? 'SKU' : 'ID'); ?></td>
@@ -239,6 +250,8 @@ class MappingPage
         $price_formula    = $m->price_formula    ?? '';
         $image_url_prefix = $m->image_url_prefix ?? '';
         $source_currency  = $m->source_currency  ?? '';
+        $integration_id   = (int) ($m->integration_id ?? 0);
+        $integrations     = Integration::terms();
         $group_variants   = !empty($m->group_variants);
         $variant_suffixes = self::variantSuffixesToText($m->variant_suffixes ?? '');
         $column_map       = $m ? (json_decode($m->column_map,    true) ?: []) : [];
@@ -263,6 +276,21 @@ class MappingPage
                     <td><input type="text" id="balmo-mapping-name" class="regular-text"
                                value="<?php echo esc_attr($name); ?>"
                                placeholder="<?php esc_attr_e('np. Colibra JSON', 'balmo'); ?>"></td>
+                </tr>
+                <tr>
+                    <th><label for="balmo-mapping-integration"><?php esc_html_e('Integracja', 'balmo'); ?></label></th>
+                    <td>
+                        <select id="balmo-mapping-integration">
+                            <option value="0"><?php esc_html_e('— wybierz —', 'balmo'); ?></option>
+                            <?php foreach ($integrations as $term_id => $term_name): ?>
+                                <option value="<?php echo esc_attr((string) $term_id); ?>" <?php selected($integration_id, $term_id); ?>><?php echo esc_html($term_name); ?></option>
+                            <?php endforeach; ?>
+                            <option value="new"><?php esc_html_e('+ nowa integracja', 'balmo'); ?></option>
+                        </select>
+                        <input type="text" id="balmo-mapping-integration-new" class="regular-text" style="display:none;"
+                               placeholder="<?php esc_attr_e('Nazwa nowej integracji', 'balmo'); ?>">
+                        <p class="description"><?php esc_html_e('Dostawca produktów (np. Colibra). Produkty z tego profilu dostają tę integrację; widoczna tylko w panelu.', 'balmo'); ?></p>
+                    </td>
                 </tr>
                 <tr>
                     <th><label for="balmo-mapping-format"><?php esc_html_e('Format pliku', 'balmo'); ?></label></th>
@@ -466,6 +494,15 @@ class MappingPage
             return;
         }
 
+        $integration_id = self::resolveIntegration(
+            sanitize_text_field(wp_unslash($_POST['integration_id'] ?? '')),
+            sanitize_text_field(wp_unslash($_POST['integration_new'] ?? ''))
+        );
+        if (is_wp_error($integration_id)) {
+            wp_send_json_error($integration_id->get_error_message());
+            return;
+        }
+
         // Sanitize arrays
         $column_map    = array_map('sanitize_text_field', (array) $column_map);
         $overrides     = array_map('sanitize_text_field', (array) $overrides);
@@ -482,12 +519,14 @@ class MappingPage
             'overrides'        => wp_json_encode($overrides),
             'update_fields'    => wp_json_encode($update_fields),
             'source_currency'  => $source_currency,
+            'integration_id'   => $integration_id,
             'group_variants'   => $group_variants,
             'variant_suffixes' => wp_json_encode($variant_suffixes, JSON_UNESCAPED_UNICODE),
         ];
 
         $formats = array_fill(0, count($data), '%s');
         $formats[array_search('group_variants', array_keys($data), true)] = '%d';
+        $formats[array_search('integration_id', array_keys($data), true)] = '%d';
 
         if ($id > 0) {
             $updated = $wpdb->update(\Balmo\table_mappings(), $data, ['id' => $id], $formats, ['%d']);
@@ -511,6 +550,34 @@ class MappingPage
                 'message' => __('Profil zapisany.', 'balmo'),
             ]);
         }
+    }
+
+    // Existing term ID, or a new term when $selected is 'new'; a profile cannot be saved without an integration
+    private static function resolveIntegration(string $selected, string $new_name)
+    {
+        if ($selected === 'new') {
+            if ($new_name === '') {
+                return new \WP_Error('balmo_integration', __('Podaj nazwę nowej integracji.', 'balmo'));
+            }
+
+            $result = wp_insert_term($new_name, Integration::TAXONOMY);
+            if (is_wp_error($result)) {
+                $existing = (int) $result->get_error_data('term_exists');
+                if ($existing > 0) {
+                    return $existing;
+                }
+                return new \WP_Error('balmo_integration', $result->get_error_message());
+            }
+
+            return (int) $result['term_id'];
+        }
+
+        $term_id = (int) $selected;
+        if ($term_id <= 0 || !term_exists($term_id, Integration::TAXONOMY)) {
+            return new \WP_Error('balmo_integration', __('Wybierz integrację.', 'balmo'));
+        }
+
+        return $term_id;
     }
 
     // "AU=złote" lines to ['AU' => 'złote']; no valid line gives the defaults
@@ -597,6 +664,7 @@ class MappingPage
             'overrides'        => json_decode($m->overrides,  true) ?: [],
             'update_fields'    => json_decode($m->update_fields, true) ?: [],
             'source_currency'  => $m->source_currency ?? '',
+            'integration_id'   => (int) ($m->integration_id ?? 0),
             'group_variants'   => !empty($m->group_variants),
             'variant_suffixes' => self::variantSuffixesToText($m->variant_suffixes ?? ''),
         ]);

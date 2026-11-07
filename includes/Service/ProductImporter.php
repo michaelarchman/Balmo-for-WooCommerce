@@ -17,6 +17,7 @@ class ProductImporter
     private ColumnMapper $mapper;
     private string  $import_mode;
     private string  $expected_currency;
+    private int     $integration_id;
     private int     $current_row  = 0;
     private array   $current_data = [];
 
@@ -41,6 +42,7 @@ class ProductImporter
         $this->mapper       = new ColumnMapper($mapping);
         $this->import_mode  = $log->import_mode ?? 'full';
         $this->expected_currency = self::expectedCurrency($mapping);
+        $this->integration_id    = Integration::forMapping($mapping);
 
         if ($mapping && !empty($mapping->group_variants) && $this->import_mode !== 'update') {
             $suffixes = json_decode((string) ($mapping->variant_suffixes ?? ''), true);
@@ -273,6 +275,7 @@ class ProductImporter
         wp_set_object_terms($post_id, $type, 'product_type');
 
         $this->saveProductMeta($post_id, $mapped, $raw, true);
+        Integration::tag((int) $post_id, $this->integration_id, $this->import_id, true);
 
         return (int) $post_id;
     }
@@ -302,6 +305,7 @@ class ProductImporter
         }
 
         $this->saveProductMeta($product_id, $mapped, $raw, false);
+        Integration::tag($product_id, $this->integration_id, $this->import_id, false);
     }
 
     // Save WooCommerce product meta fields
@@ -535,6 +539,7 @@ class ProductImporter
 
         $this->ensureVariationAttribute($parent_id);
         $this->saveVariation(0, $parent_id, $sku, $suffix, $mapped);
+        Integration::tag($parent_id, $this->integration_id, $this->import_id, false);
         $this->syncVariantParent($parent_id);
     }
 
@@ -611,6 +616,7 @@ class ProductImporter
 
         $parent_id = $variation->get_parent_id();
         $this->saveVariation($variation_id, $parent_id, (string) $variation->get_sku(), '', $mapped);
+        Integration::tag($parent_id, $this->integration_id, $this->import_id, false);
         $this->syncVariantParent($parent_id);
     }
 
@@ -675,7 +681,8 @@ class ProductImporter
             }
         }
 
-        $variation->save();
+        $saved_id = (int) $variation->save();
+        Integration::tag($saved_id, $this->integration_id, $this->import_id, $is_new);
     }
 
     // Recalculate parent price and stock; a parent without active variations goes to draft
