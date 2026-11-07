@@ -25,7 +25,8 @@ Wtyczka WP/WooCommerce. Import produktów z feedów hurtowni (CSV, JSON, XML). T
 |---|---|
 | rozmowa, `docs/`, `tasks/` | polski |
 | commit | angielski |
-| komentarze w kodzie, teksty UI | polski (stan repo), UI przez `__()`, domena `balmo` |
+| komentarze w kodzie | angielski |
+| teksty UI | polski (stan repo), przez `__()`, domena `balmo` |
 
 ## Styl dokumentów i zadań
 

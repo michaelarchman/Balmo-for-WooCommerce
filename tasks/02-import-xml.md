@@ -1,9 +1,9 @@
 ---
 id: "02"
-status: todo
+status: done
 commit: "feat: [02] import xml product and ica feeds"
 after: ["01"]
-closed: ""
+closed: "2026-11-07"
 note: ""
 ---
 

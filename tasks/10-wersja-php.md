@@ -1,19 +1,19 @@
 ---
 id: "10"
-status: blocked
-commit: "fix: [10] align declared php version with code"
+status: todo
+commit: "fix: [10] require php 8.3"
 after: []
 closed: ""
-note: "Decyzja: opcja A (PHP 8.0) albo B (przepisanie na 7.4)."
+note: ""
 ---
 
-# 10 — Zgodność deklarowanej wersji PHP z kodem
+# 10 — Minimalna wersja PHP 8.3
 
 ## Problem
 
 Nagłówek wtyczki deklaruje `Requires PHP: 7.4` (`balmo.php:8`), a kod używa składni PHP 8.0. Na PHP 7.4 autoloader wczyta pierwszą taką klasę i skończy się fatal error (błąd parsowania).
 
-Miejsca (skan `grep`, 2026-11-07, pomiar `local`):
+Miejsca ze składnią 8.0 (skan `grep`, 2026-11-07, pomiar `local`):
 
 | Plik | Linie | Konstrukcja |
 |---|---|---|
@@ -26,51 +26,54 @@ Miejsca (skan `grep`, 2026-11-07, pomiar `local`):
 | `includes/Service/JsonFlattener.php` | 20, 61, 84 | typ unii `array\|\WP_Error` |
 | `includes/Cron/ImportScheduler.php` | 110, 187 | typ unii `int\|\WP_Error` |
 
-`grep` może nie złapać wszystkiego. Przy opcji B wykonawca przegląda każdy plik w `includes/` i `balmo.php` pod kątem składni i funkcji z PHP 8.0+.
+Wsparcie PHP (stan 2026-11-07):
 
-## Decyzja (do podjęcia przed wdrożeniem)
+| Wersja | Wsparcie bezpieczeństwa do |
+|---|---|
+| 7.4, 8.0 | brak (koniec 2022, 2023) |
+| 8.1 | brak (koniec 2025-12-31) |
+| 8.2 | 2026-12-31 |
+| 8.3 | 2027-12-31 |
+| 8.4 | 2028-12-31 |
 
-| Opcja | Koszt | Skutek |
-|---|---|---|
-| A. Podnieść wymaganie do PHP 8.0 | mały: nagłówek + blokada aktywacji | Sklepy na 7.4 nie aktywują wtyczki (czytelny komunikat zamiast fatal error). Reguła „bez składni PHP 8” w `README.md` przestaje obowiązywać |
-| B. Przepisać kod na PHP 7.4 | ok. 16 miejsc: `match` na `switch`/tablice, `str_starts_with` na `strpos(...) === 0`, typy unii na PHPDoc | Szersza zgodność. Reguła zostaje na stałe |
+Minimum wtyczki: **PHP 8.3**. Najniższa wersja ze wsparciem bezpieczeństwa dłuższym niż 2 miesiące.
 
-Propozycja: **A**. PHP 7.4 nie ma wsparcia od listopada 2022, a WordPress zaleca PHP 8.x. Jeśli któryś klient ma 7.4, wtedy B.
+## Zakres
 
-## Zakres — opcja A
+1. `balmo.php:8`: `Requires PHP: 8.3`.
+2. Stała `BALMO_MIN_PHP = '8.3'` w `balmo.php`, przed pierwszym użyciem.
+3. Hook aktywacji: jeśli `version_compare(PHP_VERSION, BALMO_MIN_PHP, '<')`, wywołać `deactivate_plugins(plugin_basename(__FILE__))` i `wp_die()` z komunikatem (`esc_html__`, domena `balmo`, wersja wymagana i obecna w treści). Kod sprawdzający parsuje się na PHP 5.6+ (bez składni 7.x/8.x w `balmo.php` przed sprawdzeniem: bez typów, `??`, `match`, funkcji strzałkowych).
+4. Ten sam warunek przed inicjalizacją klas (`plugins_loaded` albo początek pliku po `ABSPATH`): przy niespełnionym warunku brak rejestracji autoloadera i klas, komunikat w `admin_notices` (`manage_options`). Przypadek: wtyczka aktywna, potem downgrade PHP na serwerze.
+5. `docs/architektura.md`:
+   - linia 7: `PHP | 8.3+ (nagłówek balmo.php:8, blokada aktywacji)`;
+   - linia 13: usunąć regułę „Nowy kod: bez składni PHP 8.0”.
 
-1. `balmo.php:8`: `Requires PHP: 8.0`.
-2. Hook aktywacji: jeśli `version_compare(PHP_VERSION, '8.0', '<')`, wywołać `deactivate_plugins(plugin_basename(__FILE__))` i `wp_die()` z komunikatem (`esc_html__`, domena `balmo`). Kod sprawdzający musi się parsować na PHP 7.x (bez składni 8.0 w `balmo.php` przed sprawdzeniem).
-3. Ten sam warunek na `plugins_loaded`: bez inicjalizacji klas i z komunikatem admina (wtyczka aktywna przed aktualizacją PHP, potem downgrade).
-4. `CLAUDE.md` i `AGENTS.md`: zaktualizować wymaganie PHP. `tasks/README.md`: usunąć regułę „bez składni PHP 8”.
+## Poza zakresem
 
-## Zakres — opcja B
-
-1. Przepisać wszystkie miejsca z tabeli.
-2. Przegląd każdego pliku w `includes/` i `balmo.php`: brak składni PHP 8.0+.
-3. Sprawdzić funkcje dodane w PHP 8 (`str_contains`, `str_ends_with`, `get_debug_type`, `array_is_list` z 8.1) w całym kodzie.
+- Przepisywanie kodu na nowszą składnię (enumy, `readonly`, typy itd.).
+- `Requires at least: 5.0` i `WC requires at least: 4.0` (`balmo.php:7`, `:9`). Stare WordPress i WooCommerce nie działają na PHP 8.3. Podniesienie tych pól to osobne zadanie po decyzji.
 
 ## Kryteria akceptacji
 
-- [ ] (A) Na PHP 7.4 aktywacja kończy się czytelnym komunikatem, bez fatal error. Na PHP 8.0+ wtyczka działa jak wcześniej.
-- [ ] (B) W `includes/` i `balmo.php` nie ma składni ani funkcji z PHP 8.0+ (grep i przegląd).
-- [ ] Dokumentacja (`CLAUDE.md`, `AGENTS.md`, `README.md` zadań) zgodna z wybraną opcją.
+- [ ] `Requires PHP: 8.3` w nagłówku.
+- [ ] PHP < 8.3: aktywacja kończy się czytelnym komunikatem, bez fatal error. Wtyczka nieaktywna.
+- [ ] PHP < 8.3 przy aktywnej wtyczce: brak fatal error, komunikat admina, brak menu Balmo.
+- [ ] PHP 8.3+: wtyczka działa jak wcześniej.
+- [ ] `balmo.php` do miejsca sprawdzenia wersji bez składni nowszej niż PHP 5.6.
+- [ ] `docs/architektura.md` zgodne z kodem.
 
 ## Weryfikacja
 
 Lint i przegląd według `docs/praca.md` (kroki 4 i 5). Zmienione pliki:
 
 - `balmo.php`
-- `includes/**/*.php (opcja B)`
 - `docs/architektura.md`
 
-Grepy:
-
 ```bash
-grep -rnE "match \(|str_starts_with|str_ends_with|str_contains|\)\s*:\s*[a-zA-Z\\]+\|" includes balmo.php   # opcja B: brak wyników
-grep -n "Requires PHP" balmo.php   # opcja A: 8.0
+grep -n "Requires PHP\|BALMO_MIN_PHP" balmo.php   # 8.3, stała użyta w aktywacji i przy inicjalizacji
+grep -n "PHP 8.0\|7\.4" docs/architektura.md     # brak wyników
 ```
 
 ## Odbiór użytkownika
 
-Opcja A: aktywacja na PHP 7.4 pokazuje komunikat bez fatal error. Opcja B: import CSV, JSON i harmonogram działają na serwerze z PHP 7.4.
+Wtyczki → Zainstalowane wtyczki: Balmo wymaga PHP 8.3. Sklep na PHP 8.3+ działa jak wcześniej. Na PHP 8.2 lub starszym: aktywacja pokazuje komunikat, bez białej strony.

@@ -44,9 +44,11 @@
 | `Admin\SchedulerPage` | lista i dodawanie harmonogramów, kolumna format |
 | `Admin\HistoryPage` | historia importów, błędy wierszy |
 | `Admin\Settings` | rozmiar transzy, tryb zdjęć, domyślny status, retencja logów |
-| `Service\FeedLoader` | wybór parsera wg `format` profilu (`csv`, `json`); brak profilu → `csv` |
+| `Service\FeedLoader` | wybór parsera wg `format` profilu (`csv`, `json`, `xml`); brak profilu → `csv` |
 | `Service\CsvFetcher` | CSV do `uploads/balmo/`, separator, podgląd |
 | `Service\JsonFlattener` | JSON → CSV (obiekt z kluczami `product_id`, tablica, `products`) |
+| `Service\XmlFlattener` | XML → CSV; `XMLReader`, po jednym `<Product>`; DOCTYPE odrzucany; pusty `<active>` → `0` |
+| `Service\FeedRowFlattener` | produkt (tablica) → płaski wiersz; wspólny dla JSON i XML |
 | `Service\CsvValidator` | nagłówki, typy |
 | `Service\ColumnMapper` | wiersz → pola WC, nadpisania, formuła ceny, prefiks URL zdjęć |
 | `Service\PriceFormula` | formuły bez `eval()`, zmienne `{price}`, `{vat}` |
@@ -55,7 +57,7 @@
 
 ## Przepływ importu
 
-1. `FeedLoader` → `CsvFetcher` / `JsonFlattener` → CSV na dysku.
+1. `FeedLoader` → `CsvFetcher` / `JsonFlattener` / `XmlFlattener` → CSV na dysku.
 2. `CsvValidator` → podgląd (`ImportPage`).
 3. Rekord `balmo_import_log` (`pending` / `running`).
 4. Transze:
@@ -86,5 +88,5 @@
 - Wejście: sanitizacja. Wyjście: escapowanie.
 - Teksty UI: `__()` / `esc_html__()`, domena `balmo`.
 - Niezaufane: URL feedu, upload, zmapowane wartości.
-- Komentarze po polsku, gęstość jak w sąsiednim kodzie.
+- Komentarze po angielsku, gęstość jak w sąsiednim kodzie. Komentarz powtarzający kod: nie pisać.
 - Bez ścieżek środowiska, sekretów, eksportów danych w repo.
