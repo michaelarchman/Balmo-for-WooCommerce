@@ -47,6 +47,6 @@ Numer zadania = kolejność wdrożenia. Pliki zadań leżą w tym folderze jako 
 ## Zasady wspólne dla wszystkich zadań
 
 - Konwencje z `AGENTS.md` i `CLAUDE.md` (wcięcia, nazwy, sanitizacja, `manage_woocommerce`, text domain `balmo`).
-- Nowy kod nie dokłada składni PHP 8 (`match`, `str_starts_with`, typy unii, nullsafe). Decyzja o docelowej wersji zapada w T9.
+- Nowy kod nie dokłada składni PHP 8 (`match`, `str_starts_with`, typy unii, nullsafe). Decyzja o docelowej wersji zapada w zadaniu 10.
 - Brak automatycznych testów. Każde zadanie kończy się `php -l` na zmienionych plikach i ręcznym scenariuszem w lokalnym WP + WooCommerce, zgodnie z sekcją „Weryfikacja”.
 - Po zmianach crona lub transz zawsze testować obie ścieżki: import ręczny i harmonogram.

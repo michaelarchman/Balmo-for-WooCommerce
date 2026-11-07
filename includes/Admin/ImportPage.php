@@ -4,9 +4,8 @@ namespace Balmo\Admin;
 
 if (!defined('ABSPATH')) exit;
 
-use Balmo\Service\CsvFetcher;
 use Balmo\Service\CsvValidator;
-use Balmo\Service\JsonFlattener;
+use Balmo\Service\FeedLoader;
 
 class ImportPage
 {
@@ -170,16 +169,12 @@ class ImportPage
         $url         = esc_url_raw(trim($_POST['csv_url'] ?? ''));
         $mapping_id  = (int) ($_POST['mapping_id'] ?? 0);
 
-        $format = self::detectFormat($mapping_id);
+        $format = FeedLoader::formatForMapping($mapping_id);
 
         if (!empty($_FILES['csv_file']['tmp_name'])) {
-            $result = $format === 'json'
-                ? JsonFlattener::fromUpload($_FILES['csv_file'], $source_type)
-                : CsvFetcher::fromUpload($_FILES['csv_file'], $source_type);
+            $result = FeedLoader::fromUpload($_FILES['csv_file'], $source_type, $format);
         } elseif (!empty($url)) {
-            $result = $format === 'json'
-                ? JsonFlattener::fromUrl($url, $source_type)
-                : CsvFetcher::fromUrl($url, $source_type);
+            $result = FeedLoader::fromUrl($url, $source_type, $format);
         } else {
             wp_send_json_error(__('Podaj URL lub prześlij plik.', 'balmo'));
             return;
@@ -205,18 +200,6 @@ class ImportPage
         ]);
     }
 
-    // Format pochodzi wyłącznie z wybranego profilu mapowania
-    private static function detectFormat(int $mapping_id): string
-    {
-        if (!$mapping_id) return 'csv';
-
-        global $wpdb;
-        $fmt = $wpdb->get_var($wpdb->prepare(
-            "SELECT format FROM " . \Balmo\table_mappings() . " WHERE id = %d", $mapping_id
-        ));
-
-        return in_array($fmt, ['csv', 'json'], true) ? $fmt : 'csv';
-    }
 
     // --- AJAX: Rozpocznij import ---
     // Zapisuje rekord do DB, zleca przetwarzanie WP-Cron. Przeglądarka tylko monitoruje.

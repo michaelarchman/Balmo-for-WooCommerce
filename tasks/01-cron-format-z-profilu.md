@@ -3,6 +3,7 @@
 - **Tura:** 1
 - **Priorytet:** wysoki
 - **Zależności:** brak. 02 rozszerza wynik tego zadania o XML.
+- **Status (2026-11-07):** kod wdrożony, `php -l` OK (PHP 8.2; `FeedLoader.php` także 7.4). Smoke test poza WP: `JsonFlattener` na ICA JSON daje 9131 wierszy, produkt 423 ma `active = 0`. Scenariusze ręczne w WP + WooCommerce jeszcze nie przeprowadzone.
 
 ## Problem
 

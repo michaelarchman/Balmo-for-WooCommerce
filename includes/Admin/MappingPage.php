@@ -413,7 +413,7 @@ class MappingPage
 
         $data = [
             'name'             => $name,
-            'format'           => in_array($format, ['csv', 'json'], true) ? $format : 'csv',
+            'format'           => \Balmo\Service\FeedLoader::normalizeFormat($format),
             'source_type'      => in_array($source_type, ['all', 'ica'], true) ? $source_type : 'all',
             'match_by'         => in_array($match_by, ['sku', 'id'], true) ? $match_by : 'sku',
             'price_formula'    => $price_formula,

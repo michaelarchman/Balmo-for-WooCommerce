@@ -48,6 +48,7 @@ class SchedulerPage
                             <th><?php esc_html_e('Nazwa', 'balmo'); ?></th>
                             <th><?php esc_html_e('URL', 'balmo'); ?></th>
                             <th><?php esc_html_e('Typ', 'balmo'); ?></th>
+                            <th><?php esc_html_e('Format', 'balmo'); ?></th>
                             <th><?php esc_html_e('Profil', 'balmo'); ?></th>
                             <th><?php esc_html_e('Interwał', 'balmo'); ?></th>
                             <th><?php esc_html_e('Godzina', 'balmo'); ?></th>
@@ -63,6 +64,7 @@ class SchedulerPage
                                     <small><?php echo esc_html($s['url']); ?></small>
                                 </td>
                                 <td><?php echo esc_html(strtoupper($s['source_type'])); ?></td>
+                                <td><?php echo esc_html(strtoupper($s['format'] ?? 'csv')); ?></td>
                                 <td><?php echo esc_html($s['mapping_name'] ?? '—'); ?></td>
                                 <td><?php echo esc_html(ImportScheduler::getIntervalLabel($s['interval'])); ?></td>
                                 <td><?php echo esc_html($s['run_time']); ?></td>
@@ -94,7 +96,7 @@ class SchedulerPage
                     <td><input type="text" id="balmo-sched-name" class="regular-text" placeholder="np. Colibra codzienny"></td>
                 </tr>
                 <tr>
-                    <th><label for="balmo-sched-url"><?php esc_html_e('URL pliku CSV', 'balmo'); ?></label></th>
+                    <th><label for="balmo-sched-url"><?php esc_html_e('URL pliku', 'balmo'); ?></label></th>
                     <td>
                         <input type="url" id="balmo-sched-url" class="large-text"
                                placeholder="https://drop.seltu.pl/products/colibra/csv/">

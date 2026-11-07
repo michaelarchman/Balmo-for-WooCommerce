@@ -4,8 +4,8 @@ namespace Balmo\Cron;
 
 if (!defined('ABSPATH')) exit;
 
-use Balmo\Service\CsvFetcher;
 use Balmo\Service\CsvValidator;
+use Balmo\Service\FeedLoader;
 
 class ImportScheduler
 {
@@ -40,15 +40,20 @@ class ImportScheduler
         $schedules = get_option(self::OPTION_KEY, []);
         if (!is_array($schedules)) return [];
 
-        // Dołącz nazwę profilu mapowania
+        // Dołącz nazwę i format profilu mapowania (bez profilu: CSV)
         global $wpdb;
         foreach ($schedules as &$s) {
             $s['mapping_name'] = null;
+            $s['format']       = 'csv';
             if (!empty($s['mapping_id'])) {
-                $s['mapping_name'] = $wpdb->get_var($wpdb->prepare(
-                    "SELECT name FROM " . \Balmo\table_mappings() . " WHERE id = %d",
+                $profile = $wpdb->get_row($wpdb->prepare(
+                    "SELECT name, format FROM " . \Balmo\table_mappings() . " WHERE id = %d",
                     $s['mapping_id']
                 ));
+                if ($profile) {
+                    $s['mapping_name'] = $profile->name;
+                    $s['format']       = FeedLoader::normalizeFormat((string) $profile->format);
+                }
             }
         }
         unset($s);
@@ -181,8 +186,20 @@ class ImportScheduler
     // Główna logika wykonania importu przez cron
     private static function execute(array $schedule): int|\WP_Error
     {
-        // Pobierz plik CSV
-        $fetcher_result = CsvFetcher::fromUrl($schedule['url'], $schedule['source_type']);
+        global $wpdb;
+
+        // Pobierz profil mapowania — określa format pliku
+        $mapping = null;
+        if (!empty($schedule['mapping_id'])) {
+            $mapping = $wpdb->get_row($wpdb->prepare(
+                "SELECT * FROM " . \Balmo\table_mappings() . " WHERE id = %d",
+                (int) $schedule['mapping_id']
+            ));
+        }
+        $format = $mapping ? FeedLoader::normalizeFormat((string) ($mapping->format ?? 'csv')) : 'csv';
+
+        // Pobierz plik (JSON jest konwertowany do CSV)
+        $fetcher_result = FeedLoader::fromUrl($schedule['url'], $schedule['source_type'], $format);
         if (is_wp_error($fetcher_result)) {
             return $fetcher_result;
         }
@@ -198,18 +215,7 @@ class ImportScheduler
             return new \WP_Error('validation_failed', implode('; ', $validation['errors']));
         }
 
-        // Pobierz profil mapowania
-        $mapping = null;
-        if (!empty($schedule['mapping_id'])) {
-            global $wpdb;
-            $mapping = $wpdb->get_row($wpdb->prepare(
-                "SELECT * FROM " . \Balmo\table_mappings() . " WHERE id = %d",
-                (int) $schedule['mapping_id']
-            ));
-        }
-
         // Utwórz rekord importu
-        global $wpdb;
         $wpdb->insert(
             \Balmo\table_import_log(),
             [
