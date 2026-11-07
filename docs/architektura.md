@@ -51,7 +51,7 @@
 | `Service\CsvValidator` | nagłówki, typy |
 | `Service\ColumnMapper` | wiersz → pola WC, nadpisania, formuła ceny, prefiks URL zdjęć |
 | `Service\PriceFormula` | formuły bez `eval()`, zmienne `{price}`, `{vat}` |
-| `Service\ProductImporter` | transza: create/update produktu, kategorie, atrybuty globalne (`pa_*`, meta `_balmo_attribute_taxonomies`), zdjęcia zewnętrzne, błędy |
+| `Service\ProductImporter` | transza: create/update produktu, kategorie, atrybuty globalne (`pa_*`, meta `_balmo_attribute_taxonomies`), grupowanie wariantów (produkt variable + `WC_Product_Variation`, opcja profilu `group_variants`), zdjęcia zewnętrzne, błędy |
 | `Cron\ImportScheduler` | harmonogramy w opcji `balmo_schedules`, `execute()` |
 
 ## Przepływ importu
@@ -70,9 +70,9 @@
 
 | Tabela | Zawiera |
 |---|---|
-| `{prefix}balmo_import_log` | import: status, liczniki, offsety, plik, separator |
+| `{prefix}balmo_import_log` | import: status, liczniki, offsety, plik, separator, `variant_bases` (kody bazowe par wariantów) |
 | `{prefix}balmo_import_errors` | błąd wiersza: numer, dane (max 10 pól), komunikat |
-| `{prefix}balmo_mappings` | profil: `format`, `source_type`, `image_url_prefix`, `column_map`, `overrides`, `price_formula`, `match_by`, `update_fields` |
+| `{prefix}balmo_mappings` | profil: `format`, `source_type`, `image_url_prefix`, `column_map`, `overrides`, `price_formula`, `match_by`, `update_fields`, `group_variants`, `variant_suffixes` |
 
 - Zmiana schematu: `dbDelta` w `balmo.php`, domyślne wartości = obecne zachowanie.
 

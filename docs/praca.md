@@ -6,9 +6,9 @@
 |---|---|---|---|---|---|
 | 1 | użytkownik | — | — | opis problemu, cel | — |
 | 2 | mózg | mocny | sesja rozmowy | review kodu, plik zadania | kod przed „Wykonaj” |
-| 3 | wykonawca | średni | podagent `model: sonnet` | zakres zadania | poza zakresem, testy, commit |
+| 3 | wykonawca | pole `model` zadania | podagent: `średni` = `model: sonnet`, `lekki` = `model: haiku` | zakres zadania | poza zakresem, testy, commit |
 | 4 | kontroler | słaby | podagent `model: haiku` | lint, błędy logiczne → lista | zmiany kodu |
-| 5 | wykonawca | średni | ten sam podagent co 3 | poprawki, review diffu, `status: done` | zmiana `commit` |
+| 5 | wykonawca | jak krok 3 | ten sam podagent co 3 | poprawki, review diffu, `status: done` | zmiana `commit` |
 | 6 | tester | słaby | podagent `model: haiku` | testy z sekcji „Testy” zadania | pisanie testów |
 | 7 | mózg | mocny | sesja rozmowy | odpowiedź + komenda commita | lista niesprawdzonych rzeczy |
 | 8 | użytkownik | — | — | commit, odbiór w przeglądarce | — |
@@ -70,6 +70,7 @@ git commit -m "feat: [02] import xml product and ica feeds"
 id: "NN"
 status: todo
 commit: "<typ>: [NN] <opis po angielsku>"
+model: średni
 after: []
 closed: ""
 note: ""
@@ -91,6 +92,7 @@ note: ""
 | `id` | `"NN"` | mózg |
 | `status` | `todo` / `blocked` / `done` | mózg; `done` = wykonawca (krok 5) |
 | `commit` | temat commita | mózg przy pisaniu zadania |
+| `model` | `średni` / `lekki` (wykonawca, kroki 3 i 5) | mózg |
 | `after` | numery zadań wymaganych wcześniej | mózg |
 | `closed` | `RRRR-MM-DD` | wykonawca |
 | `note` | jedno zdanie (np. powód `blocked`) | zmieniający status |

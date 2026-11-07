@@ -1,9 +1,10 @@
 ---
 id: "08"
-status: todo
+status: done
 commit: "fix: [08] match categories under their parent"
+model: lekki
 after: []
-closed: ""
+closed: "2026-11-07"
 note: ""
 ---
 

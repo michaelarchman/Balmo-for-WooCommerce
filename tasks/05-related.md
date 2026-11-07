@@ -2,6 +2,7 @@
 id: "05"
 status: blocked
 commit: "feat: [05] map related products to upsells"
+model: średni
 after: []
 closed: ""
 note: "Decyzja D1 (upsell czy cross-sell) do potwierdzenia."

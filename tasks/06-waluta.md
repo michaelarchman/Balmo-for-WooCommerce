@@ -2,6 +2,7 @@
 id: "06"
 status: blocked
 commit: "feat: [06] check feed currency against profile"
+model: średni
 after: []
 closed: ""
 note: "Decyzje D1–D3 do potwierdzenia."

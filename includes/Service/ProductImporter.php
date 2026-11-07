@@ -22,7 +22,15 @@ class ProductImporter
     // Per-instance caches, so a batch does not repeat lookups for the same attribute or term
     private ?array  $attribute_index = null; // lowercase label => attribute slug (without pa_)
     private array   $term_cache      = [];   // taxonomy|lowercase value => term_id
+    private array   $category_cache  = [];   // parent_id|lowercase name => product_cat term_id
     private ?array  $skip_values     = null; // lowercase values dropped at import
+
+    // Variant grouping (profile option group_variants, full import only)
+    private const VARIANT_ATTRIBUTE = 'Wykończenie';
+    private bool    $group_variants   = false;
+    private array   $variant_suffixes = [];   // suffix => attribute value; the first suffix is primary
+    private ?array  $variant_bases    = null; // base code => true, only bases with at least two codes in the file
+    private array   $standalone_cache = [];   // base code => true when the group must stay simple products
 
     public function __construct(int $import_id, object $log, ?object $mapping)
     {
@@ -31,6 +39,12 @@ class ProductImporter
         $this->mapping      = $mapping;
         $this->mapper       = new ColumnMapper($mapping);
         $this->import_mode  = $log->import_mode ?? 'full';
+
+        if ($mapping && !empty($mapping->group_variants) && $this->import_mode !== 'update') {
+            $suffixes = json_decode((string) ($mapping->variant_suffixes ?? ''), true);
+            $this->variant_suffixes = is_array($suffixes) && $suffixes ? $suffixes : \Balmo\Admin\MappingPage::DEFAULT_VARIANT_SUFFIXES;
+            $this->group_variants   = true;
+        }
     }
 
     /**
@@ -47,6 +61,10 @@ class ProductImporter
         $stats = ['processed' => 0, 'created' => 0, 'updated' => 0, 'skipped' => 0, 'errors' => 0, 'next_offset' => $offset];
         $started_at = microtime(true);
         $rows_read  = 0;
+
+        if ($this->group_variants) {
+            $this->loadVariantBases($file_path, $delimiter);
+        }
 
         $handle = fopen($file_path, 'r');
         if (!$handle) {
@@ -147,17 +165,43 @@ class ProductImporter
         $ext_id     = (int) ($data['product_id'] ?? 0);
         $product_id = $this->findProduct($match_by, $sku, $ext_id);
 
+        // A variation is never updated as a standalone product (title and content belong to the parent)
+        if ($product_id && get_post_type($product_id) === 'product_variation') {
+            $this->updateVariation($product_id, $mapped);
+            return 'updated';
+        }
+
         if ($this->import_mode === 'update' && !$product_id) {
             return 'skipped'; // Update mode: do not create new products
         }
 
+        $group = $this->group_variants ? $this->variantGroupFor($sku) : null;
+
         if ($product_id) {
+            if ($group !== null) {
+                $this->logError($row_num, $data, sprintf(
+                    __('Produkt %s już istnieje jako prosty — nie jest konwertowany na wariant.', 'balmo'),
+                    $sku
+                ));
+            }
             $this->updateProduct($product_id, $mapped, $data);
             return 'updated';
-        } else {
-            $this->createProduct($mapped, $data);
-            return 'created';
         }
+
+        if ($group !== null) {
+            if ($this->isStandaloneGroup($group['base'])) {
+                $this->logError($row_num, $data, sprintf(
+                    __('Produkt %s należy do grupy z istniejącym produktem prostym — importowany jako prosty.', 'balmo'),
+                    $sku
+                ));
+            } else {
+                $this->createVariantProduct($group['base'], $group['suffix'], $sku, $mapped, $data);
+                return 'created';
+            }
+        }
+
+        $this->createProduct($mapped, $data);
+        return 'created';
     }
 
     // Find existing WC product by SKU or external ID meta
@@ -182,8 +226,8 @@ class ProductImporter
         return 0;
     }
 
-    // Create new product
-    private function createProduct(array $mapped, array $raw): void
+    // Create new product, returns its post ID
+    private function createProduct(array $mapped, array $raw, string $type = 'simple'): int
     {
         $title      = $mapped['post_title'] ?? '';
         $content    = $mapped['post_content'] ?? '';
@@ -206,10 +250,11 @@ class ProductImporter
             throw new \InvalidArgumentException($post_id->get_error_message());
         }
 
-        // Default product type: simple
-        wp_set_object_terms($post_id, 'simple', 'product_type');
+        wp_set_object_terms($post_id, $type, 'product_type');
 
         $this->saveProductMeta($post_id, $mapped, $raw, true);
+
+        return (int) $post_id;
     }
 
     // Update existing product
@@ -341,6 +386,294 @@ class ProductImporter
         // Attributes: after saving the price, so they work on a fresh product object
         if (isset($mapped['_attributes'])) {
             $this->assignAttributes($post_id, $mapped['_attributes']);
+        }
+    }
+
+    /**
+     * Read the whole file once and keep the base codes that occur with at least two suffixes.
+     * The result is stored in the import log, so every batch (also in another request) sees the same list.
+     */
+    private function loadVariantBases(string $file_path, string $delimiter): void
+    {
+        if ($this->variant_bases !== null) return;
+
+        $stored = $this->log->variant_bases ?? null;
+        if (is_string($stored) && $stored !== '') {
+            $bases = json_decode($stored, true);
+            if (is_array($bases)) {
+                $this->variant_bases = array_fill_keys($bases, true);
+                return;
+            }
+        }
+
+        $codes  = []; // base => [suffix => true]
+        $handle = fopen($file_path, 'r');
+        if ($handle) {
+            $bom = fread($handle, 3);
+            if ($bom !== "\xEF\xBB\xBF") rewind($handle);
+
+            $headers = fgetcsv($handle, 0, $delimiter) ?: [];
+            $headers = array_map('trim', $headers);
+
+            $column_map = $this->mapping ? (json_decode((string) $this->mapping->column_map, true) ?: []) : [];
+            $sku_column = in_array('product_code', $headers, true) ? 'product_code' : (string) array_search('_sku', $column_map, true);
+            $sku_index  = array_search($sku_column, $headers, true);
+
+            if ($sku_index !== false) {
+                while (($row = fgetcsv($handle, 0, $delimiter)) !== false) {
+                    $split = $this->splitVariantCode(trim((string) ($row[$sku_index] ?? '')));
+                    if ($split !== null) {
+                        $codes[$split['base']][$split['suffix']] = true;
+                    }
+                }
+            }
+            fclose($handle);
+        }
+
+        $bases = [];
+        foreach ($codes as $base => $suffixes) {
+            if (count($suffixes) >= 2) {
+                $bases[] = $base;
+            }
+        }
+
+        global $wpdb;
+        $json = wp_json_encode($bases);
+        $wpdb->update(\Balmo\table_import_log(), ['variant_bases' => $json], ['id' => $this->import_id], ['%s'], ['%d']);
+        $this->log->variant_bases = $json;
+        $this->variant_bases      = array_fill_keys($bases, true);
+    }
+
+    // 'P14798AU' => ['base' => 'P14798', 'suffix' => 'AU'] when the code ends with a configured suffix
+    private function splitVariantCode(string $sku): ?array
+    {
+        foreach (array_keys($this->variant_suffixes) as $suffix) {
+            $suffix = (string) $suffix;
+            $length = strlen($suffix);
+            if ($length > 0 && strlen($sku) > $length && substr($sku, -$length) === $suffix) {
+                return ['base' => substr($sku, 0, -$length), 'suffix' => $suffix];
+            }
+        }
+        return null;
+    }
+
+    // ['base', 'suffix'] when the code belongs to a pair found in the file, otherwise null
+    private function variantGroupFor(string $sku): ?array
+    {
+        $split = $this->splitVariantCode($sku);
+        if ($split === null || !isset($this->variant_bases[$split['base']])) return null;
+
+        return $split;
+    }
+
+    // A group stays simple when any of its codes, or the base code, already belongs to a simple product
+    private function isStandaloneGroup(string $base): bool
+    {
+        if (isset($this->standalone_cache[$base])) {
+            return $this->standalone_cache[$base];
+        }
+
+        $standalone = false;
+        $codes      = [$base];
+        foreach (array_keys($this->variant_suffixes) as $suffix) {
+            $codes[] = $base . $suffix;
+        }
+
+        foreach ($codes as $code) {
+            $id = wc_get_product_id_by_sku($code);
+            if (!$id) continue;
+
+            $is_variable_parent = $code === $base && \WC_Product_Factory::get_product_type($id) === 'variable';
+            if (get_post_type($id) === 'product' && !$is_variable_parent) {
+                $standalone = true;
+                break;
+            }
+        }
+
+        return $this->standalone_cache[$base] = $standalone;
+    }
+
+    // Create or update the variable parent and the variation for one row
+    private function createVariantProduct(string $base, string $suffix, string $sku, array $mapped, array $raw): void
+    {
+        $parent_mapped = $this->parentMapped($base, $sku, $mapped);
+        $parent_id     = (int) wc_get_product_id_by_sku($base);
+
+        if (!$parent_id) {
+            $parent_id = $this->createProduct($parent_mapped, $raw, 'variable');
+        } elseif ($suffix === (string) array_key_first($this->variant_suffixes)) {
+            // Parent data comes from the primary variant, so the result does not depend on row order
+            $this->updateProduct($parent_id, $parent_mapped, $raw);
+        }
+
+        $this->ensureVariationAttribute($parent_id);
+        $this->saveVariation(0, $parent_id, $sku, $suffix, $mapped);
+        $this->syncVariantParent($parent_id);
+    }
+
+    // Parent keeps descriptive fields; price, stock, weight, EAN and external ID belong to the variation
+    private function parentMapped(string $base, string $sku, array $mapped): array
+    {
+        $parent = $mapped;
+        unset(
+            $parent['_regular_price'], $parent['_sale_price'], $parent['_stock'], $parent['_weight'],
+            $parent['_product_id_ext'], $parent['_ean'], $parent['post_status']
+        );
+
+        $parent['_sku'] = $base;
+        if (isset($parent['post_title'])) {
+            $parent['post_title'] = trim(preg_replace('/\s*\(' . preg_quote($sku, '/') . '\)\s*$/u', '', $parent['post_title']));
+        }
+
+        return $parent;
+    }
+
+    // [taxonomy, term id, term slug] of the finish attribute for a suffix
+    private function variantTerm(string $suffix): array
+    {
+        $taxonomy = $this->resolveAttributeTaxonomy(self::VARIANT_ATTRIBUTE);
+        $value    = (string) ($this->variant_suffixes[$suffix] ?? '');
+        $term_id  = $taxonomy !== '' && $value !== '' ? $this->resolveAttributeTerm($taxonomy, $value) : 0;
+        $term     = $term_id ? get_term($term_id, $taxonomy) : null;
+
+        if (!$term || is_wp_error($term)) {
+            throw new \RuntimeException(sprintf(__('Nie można przygotować atrybutu wariantu dla sufiksu %s.', 'balmo'), $suffix));
+        }
+
+        return [$taxonomy, $term_id, $term->slug];
+    }
+
+    // Parent gets the finish attribute (used for variations) with all configured values
+    private function ensureVariationAttribute(int $parent_id): void
+    {
+        $product = wc_get_product($parent_id);
+        if (!$product) return;
+
+        $term_ids = [];
+        $taxonomy = '';
+        foreach (array_keys($this->variant_suffixes) as $suffix) {
+            [$taxonomy, $term_id] = $this->variantTerm((string) $suffix);
+            $term_ids[] = $term_id;
+        }
+
+        $attributes = $product->get_attributes();
+        if (isset($attributes[$taxonomy]) && $attributes[$taxonomy]->get_variation()) return;
+
+        wp_set_object_terms($parent_id, $term_ids, $taxonomy);
+
+        $attribute = new \WC_Product_Attribute();
+        $attribute->set_id((int) wc_attribute_taxonomy_id_by_name($taxonomy));
+        $attribute->set_name($taxonomy);
+        $attribute->set_options($term_ids);
+        $attribute->set_position(count($attributes));
+        $attribute->set_visible(true);
+        $attribute->set_variation(true);
+
+        $attributes[$taxonomy] = $attribute;
+        $product->set_attributes($attributes);
+        $product->save();
+    }
+
+    // Update an existing variation (full or ICA import) and keep the parent in sync
+    private function updateVariation(int $variation_id, array $mapped): void
+    {
+        $variation = wc_get_product($variation_id);
+        if (!$variation instanceof \WC_Product_Variation) {
+            throw new \RuntimeException(__('Nie można wczytać wariantu produktu.', 'balmo'));
+        }
+
+        $parent_id = $variation->get_parent_id();
+        $this->saveVariation($variation_id, $parent_id, (string) $variation->get_sku(), '', $mapped);
+        $this->syncVariantParent($parent_id);
+    }
+
+    // Create ($variation_id = 0) or update a variation; only mapped fields are changed
+    private function saveVariation(int $variation_id, int $parent_id, string $sku, string $suffix, array $mapped): void
+    {
+        $is_new    = $variation_id === 0;
+        $variation = $is_new ? new \WC_Product_Variation() : wc_get_product($variation_id);
+
+        if ($is_new) {
+            [$taxonomy, , $slug] = $this->variantTerm($suffix);
+            $variation->set_parent_id($parent_id);
+            $variation->set_sku($sku);
+            $variation->set_attributes([$taxonomy => $slug]);
+        }
+
+        if (isset($mapped['_regular_price'])) {
+            $variation->set_regular_price(wc_format_decimal($mapped['_regular_price']));
+        }
+        if (isset($mapped['_sale_price']) && $mapped['_sale_price'] !== '') {
+            $variation->set_sale_price(wc_format_decimal($mapped['_sale_price']));
+        }
+
+        if (isset($mapped['_stock'])) {
+            $stock = (int) $mapped['_stock'];
+            $variation->set_manage_stock(true);
+            $variation->set_stock_quantity($stock);
+            $variation->set_stock_status($stock > 0 ? 'instock' : 'outofstock');
+        } elseif ($is_new) {
+            $variation->set_manage_stock(false);
+            $variation->set_stock_status('instock');
+        }
+
+        if (isset($mapped['_weight'])) {
+            $variation->set_weight(wc_format_decimal($mapped['_weight']));
+        }
+
+        // An inactive variation is "private": WooCommerce treats it as unavailable
+        if (isset($mapped['post_status'])) {
+            $variation->set_status($mapped['post_status'] === 'draft' ? 'private' : 'publish');
+        } elseif ($is_new) {
+            $variation->set_status('publish');
+        }
+
+        if (isset($mapped['_product_id_ext'])) {
+            $variation->update_meta_data('_product_id_ext', sanitize_text_field($mapped['_product_id_ext']));
+        }
+
+        if (isset($mapped['_ean'])) {
+            $ean = sanitize_text_field($mapped['_ean']);
+            $variation->update_meta_data('_ean', $ean);
+            if (preg_match('/^(\d{8}|\d{12,14})$/', $ean)) {
+                $this->applyGtin($variation, $ean);
+            }
+        }
+
+        if (isset($mapped['_thumbnail']) && get_option('balmo_image_mode', 'none') === 'external') {
+            $url = esc_url_raw((string) $mapped['_thumbnail']);
+            $attach_id = $url !== '' ? $this->getOrCreateExternalAttachment($url, $parent_id) : 0;
+            if ($attach_id) {
+                $variation->set_image_id($attach_id);
+            }
+        }
+
+        $variation->save();
+    }
+
+    // Recalculate parent price and stock; a parent without active variations goes to draft
+    private function syncVariantParent(int $parent_id): void
+    {
+        wc_delete_product_transients($parent_id);
+        \WC_Product_Variable::sync($parent_id);
+
+        $active = get_posts([
+            'post_type'   => 'product_variation',
+            'post_parent' => $parent_id,
+            'post_status' => 'publish',
+            'fields'      => 'ids',
+            'numberposts' => 1,
+        ]);
+
+        if (empty($active)) {
+            if (get_post_status($parent_id) !== 'draft') {
+                wp_update_post(['ID' => $parent_id, 'post_status' => 'draft']);
+                update_post_meta($parent_id, '_balmo_auto_draft', '1');
+            }
+        } elseif (get_post_meta($parent_id, '_balmo_auto_draft', true)) {
+            delete_post_meta($parent_id, '_balmo_auto_draft');
+            $status = get_option('balmo_default_status', 'publish');
+            wp_update_post(['ID' => $parent_id, 'post_status' => in_array($status, ['publish', 'draft', 'pending'], true) ? $status : 'publish']);
         }
     }
 
@@ -581,16 +914,8 @@ class ProductImporter
         foreach ($parts as $cat_name) {
             if (empty($cat_name)) continue;
 
-            // Look up an existing category under the given parent
-            $term = get_term_by('name', $cat_name, 'product_cat');
-            if (!$term) {
-                // Create new category
-                $result = wp_insert_term($cat_name, 'product_cat', ['parent' => $parent_id]);
-                if (is_wp_error($result)) continue;
-                $term_id = $result['term_id'];
-            } else {
-                $term_id = $term->term_id;
-            }
+            $term_id = $this->resolveCategoryTerm($cat_name, $parent_id);
+            if ($term_id === 0) continue;
 
             $term_ids[] = $term_id;
             $parent_id  = $term_id;
@@ -599,6 +924,37 @@ class ProductImporter
         if (!empty($term_ids)) {
             wp_set_object_terms($post_id, $term_ids, 'product_cat');
         }
+    }
+
+    // Find or create a category under the given parent; 0 when it cannot be created
+    private function resolveCategoryTerm(string $name, int $parent_id): int
+    {
+        $key = $parent_id . '|' . mb_strtolower($name);
+        if (isset($this->category_cache[$key])) {
+            return $this->category_cache[$key];
+        }
+
+        $terms = get_terms([
+            'taxonomy'   => 'product_cat',
+            'name'       => $name,
+            'parent'     => $parent_id,
+            'hide_empty' => false,
+            'number'     => 1,
+        ]);
+        if (!empty($terms) && !is_wp_error($terms)) {
+            return $this->category_cache[$key] = (int) $terms[0]->term_id;
+        }
+
+        $result = wp_insert_term($name, 'product_cat', ['parent' => $parent_id]);
+        if (is_wp_error($result)) {
+            $existing = (int) $result->get_error_data();
+            if ($existing > 0) {
+                return $this->category_cache[$key] = $existing;
+            }
+            return 0;
+        }
+
+        return $this->category_cache[$key] = (int) $result['term_id'];
     }
 
     // Save images as external URLs (no download)

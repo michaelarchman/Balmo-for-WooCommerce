@@ -1,10 +1,11 @@
 ---
 id: "04"
-status: blocked
+status: done
 commit: "feat: [04] group au/ag codes into variable products"
+model: średni
 after: ["03"]
-closed: ""
-note: "Decyzje D1–D7 do potwierdzenia."
+closed: "2026-11-07"
+note: "Wykonane z propozycjami D1–D7 (użytkownik: Wykonaj)."
 ---
 
 # 04 — Grupowanie wariantów AU/AG w produkty variable
