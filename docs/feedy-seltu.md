@@ -1,33 +1,34 @@
 # Feedy drop.seltu.pl (Colibra)
 
-Dane z analizy feedów z 2026-11-07. Liczby rekordów zmieniają się w czasie.
+Liczby: stan 2026-11-07, zmienne.
 
 ## Pliki
 
-| Feed | URL | Rekordy | Uwagi |
+| Feed | URL | Rekordy | Struktura |
 |---|---|---|---|
-| Pełne dane XML | `https://drop.seltu.pl/products/colibra/xml/` | 1854 | `main_image` + `additional_images/image` (max 9 dodatkowych), `attributes/attribute{name,value}`, `related`, `permalink` |
-| Pełne dane JSON | `https://drop.seltu.pl/products/colibra/json/` | 1854 | obiekt `{"425": {...}}`, `images[]` ze ścieżkami względnymi, `atributes[]` (literówka w feedzie) |
-| Pełne dane CSV | `https://drop.seltu.pl/products/colibra/csv/` | 1854 | separator `;`, 22 kolumny, tylko `images 1..7`, bez atrybutów i `related` |
-| ICA XML | `https://drop.seltu.pl/products/colibra/ica/xml/` | 9131 | `product_id`, `product_code`, `active`, `price`, `stock`, `currency`; nieaktywny produkt ma pusty `<active></active>` |
-| ICA JSON | `https://drop.seltu.pl/products/colibra/ica/json/` | 9131 | `active` jako `true`/`false`, `price` jako int albo float |
+| pełny XML | `https://drop.seltu.pl/products/colibra/xml/` | 1854 | `<Products><Product>`; `main_image`, `additional_images/image` (0–9), `attributes/attribute{name,value}`, `related`, `permalink` |
+| pełny JSON | `https://drop.seltu.pl/products/colibra/json/` | 1854 | `{"425": {...}}`; `images[]` względne; `atributes[]` (literówka w feedzie) |
+| pełny CSV | `https://drop.seltu.pl/products/colibra/csv/` | 1854 | `;`, 22 kolumny, `images 1..7`; brak atrybutów, `related` |
+| ICA XML | `https://drop.seltu.pl/products/colibra/ica/xml/` | 9131 | `product_id`, `product_code`, `active`, `price`, `stock`, `currency` |
+| ICA JSON | `https://drop.seltu.pl/products/colibra/ica/json/` | 9131 | jw.; `active` = `true`/`false`; `price` int lub float |
 | ICA CSV | `https://drop.seltu.pl/products/colibra/ica/csv/` | — | `product_id;product_code;active;price;stock;currency` |
-| Kategorie | `https://drop.seltu.pl/categories/colibra/{csv,xml,json}/` | 24 | `id`, `name` (ścieżka `A > B`) |
+| kategorie | `https://drop.seltu.pl/categories/colibra/{csv,xml,json}/` | 24 | `id`, `name` (ścieżka `A > B`) |
 
-Parametry: `?language=en`, `?currency=eur|gbp|usd` (domyślnie PL i PLN). Brak autoryzacji.
+- Parametry: `?language=en`, `?currency=eur|gbp|usd`. Domyślnie PL, PLN.
+- Autoryzacja: brak.
 
-## Decyzje właściciela
+## Reguły importu
 
-- **`stock = 100` to prawidłowa wartość** (2026-11-07). Hurtownia podaje 100 zamiast realnej
-  liczby, gdy towar jest dostępny. Importujemy 1:1, bez logiki zastępczej.
+- `stock = 100` → towar dostępny. Import 1:1, bez przeliczeń.
+- ICA XML: nieaktywny = pusty `<active></active>` (nie `0`).
 
-## Fakty istotne dla zadań
+## Fakty dla zadań
 
-- Kategoria produktu to ścieżka nazw (`Kobieta > Kolczyki`), nie ID. Liście `Kolczyki`,
-  `Bransoletki`, `Naszyjniki` występują pod różnymi rodzicami.
-- Warianty kolorystyczne to osobne produkty z sufiksem kodu `AU` (złote) i `AG` (srebrne):
-  239 par.
-- `related` wskazuje `product_id` hurtowni. Odwołania spoza pełnego feedu dotyczą produktów
-  nieaktywnych.
-- 8 kodów EAN występuje w dwóch produktach. 54 produkty nie mają EAN.
-- 17 nazw atrybutów, wartości zawierają przecinki, zaślepki `Brak Informacji` i `nie dotyczy`.
+| Temat | Fakt | Zadanie |
+|---|---|---|
+| kategorie | ścieżka nazw, nie ID; liście `Kolczyki`, `Bransoletki`, `Naszyjniki` pod różnymi rodzicami | 08 |
+| warianty | sufiks kodu `AU` (złote), `AG` (srebrne); 239 par | 04 |
+| `related` | `product_id` hurtowni; odwołania spoza pełnego feedu = produkty nieaktywne | 05 |
+| EAN | 8 duplikatów (16 produktów), 54 bez EAN | 09 |
+| atrybuty | 17 nazw; wartości z przecinkami; zaślepki `Brak Informacji`, `nie dotyczy` | 03 |
+| zdjęcia | max 9 dodatkowych; 7 produktów > 6 | 07 |
