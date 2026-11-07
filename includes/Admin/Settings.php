@@ -32,8 +32,8 @@ class Settings
 
         add_submenu_page(
             self::MENU_SLUG,
-            __('Import CSV', 'balmo'),
-            __('Import CSV', 'balmo'),
+            __('Import', 'balmo'),
+            __('Import', 'balmo'),
             'manage_woocommerce',
             self::MENU_SLUG,
             [ImportPage::class, 'render']

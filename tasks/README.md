@@ -18,13 +18,14 @@
 | 09 | `09-ean-gtin.md` | 3 | done 2026-11-07 | — | — |
 | 10 | `10-wersja-php.md` | 1 | done 2026-11-07 | — | — |
 | 11 | `11-komentarze-po-angielsku.md` | 1 | done 2026-11-07 | — | — |
-| 12 | `12-nazwa-import.md` | 1 | todo | lekki | — |
+| 12 | `12-nazwa-import.md` | 1 | done 2026-11-07 | lekki | — |
 | 13 | `13-integracja-produktu.md` | 4 | done 2026-11-07 | średni | — |
 | 14 | `14-usuwanie-produktow.md` | 4 | done 2026-11-07 | średni | — |
 | 16 | `16-sprzatanie-integracji.md` | 4 | done 2026-11-07 | średni | — |
 | 17 | `17-audyt-produktow.md` | 5 | done 2026-11-07 | średni | — |
-| 18 | `18-poprawki-sprzatania.md` | 5 | todo | lekki | — |
+| 18 | `18-poprawki-sprzatania.md` | 5 | done 2026-11-07 | lekki | — |
 
 ## Drzewo robocze
 
 - Czyste po commicie `b508f89`. Nowe: `tasks/18-poprawki-sprzatania.md`.
+- Zadanie 18: zmiany w `includes/Service/ProductImporter.php`, `balmo.php`, `docs/architektura.md`, `tasks/18-poprawki-sprzatania.md`, `tasks/README.md`. Zmiany użytkownika (zadanie 12: `assets/admin.js`, `includes/Admin/ImportPage.php`, `includes/Admin/Settings.php`, `tasks/12-nazwa-import.md`) w drzewie osobno.

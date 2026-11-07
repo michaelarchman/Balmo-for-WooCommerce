@@ -1,10 +1,10 @@
 ---
 id: "12"
-status: todo
+status: done
 commit: "style: [12] rename csv import page to import"
 model: lekki
 after: []
-closed: ""
+closed: "2026-11-07"
 note: ""
 ---
 

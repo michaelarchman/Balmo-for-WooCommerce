@@ -18,7 +18,7 @@ class ProductImporter
     private string  $import_mode;
     private string  $expected_currency;
     private int     $integration_id;
-    private bool    $mark_seen = false; // full import of a profile that sweeps missing products
+    private bool    $mark_seen = false; // full import of a profile with an integration
     private int     $current_row  = 0;
     private array   $current_data = [];
 
@@ -44,9 +44,7 @@ class ProductImporter
         $this->import_mode  = $log->import_mode ?? 'full';
         $this->expected_currency = self::expectedCurrency($mapping);
         $this->integration_id    = Integration::forMapping($mapping);
-        $this->mark_seen         = $this->import_mode === 'full'
-            && $this->integration_id > 0
-            && IntegrationSweeper::actionFor($mapping) !== 'none';
+        $this->mark_seen         = $this->import_mode === 'full' && $this->integration_id > 0;
 
         if ($mapping && !empty($mapping->group_variants) && $this->import_mode !== 'update') {
             $suffixes = json_decode((string) ($mapping->variant_suffixes ?? ''), true);
@@ -249,14 +247,24 @@ class ProductImporter
     // A row that was skipped or failed is still in the feed: its product (and parent) must not be swept (D4)
     private function markSeenByRow(array $data): void
     {
+        $this->markSeenProduct(
+            trim((string) ($data['product_code'] ?? '')),
+            (int) ($data['product_id'] ?? 0)
+        );
+    }
+
+    // Same for a row skipped outside the importer (batch stall); the caller has only the import and the row identifiers
+    public static function markSeen(int $import_id, object $log, ?object $mapping, string $sku, int $ext_id): void
+    {
+        (new self($import_id, $log, $mapping))->markSeenProduct(trim($sku), $ext_id);
+    }
+
+    private function markSeenProduct(string $sku, int $ext_id): void
+    {
         if (!$this->mark_seen) return;
 
         try {
-            $product_id = $this->findProduct(
-                $this->mapper->getMatchBy(),
-                trim((string) ($data['product_code'] ?? '')),
-                (int) ($data['product_id'] ?? 0)
-            );
+            $product_id = $this->findProduct($this->mapper->getMatchBy(), $sku, $ext_id);
             if (!$product_id) return;
 
             update_post_meta($product_id, IntegrationSweeper::META_SEEN, (string) $this->import_id);
@@ -300,8 +308,12 @@ class ProductImporter
 
         if ($match_by === 'id' && $ext_id > 0) {
             $product_id = (int) $wpdb->get_var($wpdb->prepare(
-                "SELECT post_id FROM {$wpdb->postmeta}
-                 WHERE meta_key = '_product_id_ext' AND meta_value = %s LIMIT 1",
+                "SELECT pm.post_id FROM {$wpdb->postmeta} pm
+                 INNER JOIN {$wpdb->posts} p ON p.ID = pm.post_id
+                 WHERE pm.meta_key = '_product_id_ext' AND pm.meta_value = %s
+                   AND p.post_type IN ('product', 'product_variation')
+                   AND p.post_status NOT IN ('trash', 'auto-draft')
+                 ORDER BY pm.post_id DESC LIMIT 1",
                 (string) $ext_id
             ));
             if ($product_id) return $product_id;

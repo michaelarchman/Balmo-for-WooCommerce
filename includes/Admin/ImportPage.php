@@ -25,11 +25,11 @@ class ImportPage
         $mappings = self::getMappingOptions();
         ?>
         <div class="wrap">
-            <h1><?php esc_html_e('Import CSV — Balmo', 'balmo'); ?></h1>
+            <h1><?php esc_html_e('Import — Balmo', 'balmo'); ?></h1>
 
             <!-- STEP 1: File source -->
             <div id="balmo-step-1" class="balmo-step">
-                <h2><?php esc_html_e('Krok 1: Źródło pliku CSV', 'balmo'); ?></h2>
+                <h2><?php esc_html_e('Krok 1: Źródło pliku', 'balmo'); ?></h2>
                 <table class="form-table" role="presentation">
                     <tr>
                         <th><?php esc_html_e('Typ pliku', 'balmo'); ?></th>

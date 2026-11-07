@@ -76,7 +76,7 @@
    - ręcznie: Action Scheduler (`balmo_as_batch`)
    - harmonogram: pętla w jednym żądaniu crona (`ImportScheduler::execute`)
 5. Wiersz: `ColumnMapper` → `ProductImporter` → błędy do `balmo_import_errors`.
-6. Dopasowanie produktu: SKU (`product_code`) albo meta `_product_id_ext`.
+6. Dopasowanie produktu: SKU (`product_code`) albo meta `_product_id_ext`. Dopasowanie po ID pomija kosz i `auto-draft`; przy kilku trafieniach wygrywa najnowszy post (`ORDER BY post_id DESC`).
 7. Tryb `update`: bez tworzenia produktów, tylko pola z `update_fields`.
 
 ## Taksonomia i meta integracji
@@ -94,7 +94,7 @@
 
 | Element | Wartość |
 |---|---|
-| meta `_balmo_seen_full` | ID importu pełnego, w którym produkt był w pliku; `ProductImporter::tagProduct` (produkt, wariacja, rodzic), tylko gdy `import_mode = full`, integracja ≠ 0 i `missing_action ≠ none`; wiersz pominięty (walidacja, waluta) albo z wyjątkiem: `markSeenByRow` po surowym `product_code` / `product_id` |
+| meta `_balmo_seen_full` | ID importu pełnego, w którym produkt był w pliku; `ProductImporter::tagProduct` (produkt, wariacja, rodzic), tylko gdy `import_mode = full` i integracja ≠ 0 (niezależnie od `missing_action`); wiersz pominięty (walidacja, waluta) albo z wyjątkiem: `markSeenByRow` po surowym `product_code` / `product_id`; wiersz pominięty po zawieszeniach transzy (`balmo.php`): `ProductImporter::markSeen` z danych heartbeatu |
 | meta `_balmo_hidden` | `missing` = produkt ukryty przez sweep (`draft`); `restoreIfHidden` przy ponownym dopasowaniu → `publish`, meta usunięta |
 | opcja profilu `missing_action` | `none` (domyślnie), `draft`, `trash`, `delete` |
 | zbiór do sprzątnięcia | produkty i wariacje z termem integracji profilu, poza koszem, bez `_balmo_seen_full = import_id` |

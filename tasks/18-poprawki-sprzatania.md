@@ -1,10 +1,10 @@
 ---
 id: "18"
-status: todo
+status: done
 commit: "fix: [18] skip trashed products when matching by id"
 model: lekki
 after: []
-closed: ""
+closed: "2026-11-07"
 note: ""
 ---
 

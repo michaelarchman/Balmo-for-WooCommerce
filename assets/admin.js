@@ -10,7 +10,7 @@ jQuery(function ($) {
     var nonce   = balmoAjax.nonce;
 
     // =========================================================
-    // PAGE: CSV IMPORT
+    // PAGE: IMPORT
     // =========================================================
 
     var importState = {
@@ -35,7 +35,7 @@ jQuery(function ($) {
         var sourceType = $('input[name="balmo_source_type"]:checked').val() || 'all';
 
         if (!url && (!file || !file.files.length)) {
-            alert('Podaj URL lub wybierz plik CSV.');
+            alert('Podaj URL lub wybierz plik.');
             return;
         }
 
