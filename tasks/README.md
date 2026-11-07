@@ -20,11 +20,12 @@
 | 11 | `11-komentarze-po-angielsku.md` | 1 | done 2026-11-07 | — | — |
 | 12 | `12-nazwa-import.md` | 1 | todo | lekki | — |
 | 13 | `13-integracja-produktu.md` | 4 | done 2026-11-07 | średni | — |
-| 14 | `14-usuwanie-produktow.md` | 4 | blocked | średni | D1–D5, 13 |
-| 16 | `16-sprzatanie-integracji.md` | 4 | blocked | średni | D1–D6, 13, 14 |
+| 14 | `14-usuwanie-produktow.md` | 4 | done 2026-11-07 | średni | — |
+| 16 | `16-sprzatanie-integracji.md` | 4 | blocked | średni | D1–D6 |
 | 17 | `17-audyt-produktow.md` | 5 | blocked | średni | D1–D3, 13, 16 |
 
 ## Drzewo robocze
 
 - Kod zadania 02 jest w commicie `30f8f68` (`docs: updated`). Zadanie 02: `status: done`, zmiany dokumentów do zacommitowania.
 - Zadanie 10: zmiany w `balmo.php`, `docs/architektura.md`, `tasks/10-wersja-php.md`, `tasks/README.md`.
+- Zadanie 14: nowe `includes/Service/ProductRemover.php`, `includes/Admin/ToolsPage.php`; zmiany w `balmo.php`, `includes/Admin/HistoryPage.php`, `includes/Admin/Settings.php`, `assets/admin.js`, `docs/architektura.md`, `tasks/14-usuwanie-produktow.md`, `tasks/README.md`.

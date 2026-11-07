@@ -19,8 +19,10 @@ use Balmo\Admin\MappingPage;
 use Balmo\Admin\SchedulerPage;
 use Balmo\Admin\HistoryPage;
 use Balmo\Admin\Settings;
+use Balmo\Admin\ToolsPage;
 use Balmo\Cron\ImportScheduler;
 use Balmo\Service\Integration;
+use Balmo\Service\ProductRemover;
 
 define('BALMO_MIN_PHP', '8.3');
 
@@ -331,6 +333,7 @@ function clear_offset_attempts(int $import_id, int $offset): void
  * Registered outside is_admin(): AS runs outside the admin context.
  */
 add_action(\Balmo\Service\RelatedResolver::ACTION, [\Balmo\Service\RelatedResolver::class, 'run'], 10, 2);
+add_action(ProductRemover::ACTION, [ProductRemover::class, 'runBatch'], 10, 4);
 
 add_action('balmo_as_batch', function (int $import_id, int $offset): void {
     global $wpdb;
@@ -576,6 +579,7 @@ add_action('plugins_loaded', function (): void {
         MappingPage::init();
         SchedulerPage::init();
         HistoryPage::init();
+        ToolsPage::init();
         Settings::init();
     }
 });

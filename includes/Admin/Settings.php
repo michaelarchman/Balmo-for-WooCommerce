@@ -68,6 +68,15 @@ class Settings
 
         add_submenu_page(
             self::MENU_SLUG,
+            __('Narzędzia Balmo', 'balmo'),
+            __('Narzędzia', 'balmo'),
+            'manage_woocommerce',
+            ToolsPage::PAGE_SLUG,
+            [ToolsPage::class, 'render']
+        );
+
+        add_submenu_page(
+            self::MENU_SLUG,
             __('Ustawienia Balmo', 'balmo'),
             __('Ustawienia', 'balmo'),
             'manage_woocommerce',
@@ -125,6 +134,7 @@ class Settings
             'balmo_page_balmo-mapping',
             'balmo_page_balmo-scheduler',
             'balmo_page_balmo-history',
+            'balmo_page_balmo-tools',
             'balmo_page_balmo-settings',
         ];
         if (!in_array($hook, $balmo_pages, true)) return;

@@ -2,6 +2,8 @@
 
 namespace Balmo\Admin;
 
+use Balmo\Service\ProductRemover;
+
 if (!defined('ABSPATH')) exit;
 
 class HistoryPage
@@ -74,12 +76,13 @@ class HistoryPage
                                 $duration = $diff . 's';
                             }
                             $status_label = self::statusLabel($row->status);
+                            $is_delete    = $row->import_mode === ProductRemover::MODE;
                         ?>
                             <tr>
                                 <td><?php echo (int) $row->id; ?></td>
                                 <td><?php echo esc_html($row->created_at); ?></td>
-                                <td><?php echo esc_html(strtoupper($row->source_type)); ?></td>
-                                <td><?php echo esc_html($row->import_mode); ?></td>
+                                <td><?php echo $is_delete ? '—' : esc_html(strtoupper($row->source_type)); ?></td>
+                                <td><?php echo esc_html($is_delete ? __('Usuwanie', 'balmo') : $row->import_mode); ?></td>
                                 <td>
                                     <span class="balmo-status balmo-status-<?php echo esc_attr($row->status); ?>">
                                         <?php echo esc_html($status_label); ?>
@@ -108,6 +111,14 @@ class HistoryPage
                                 <td>
                                     <?php if ($row->source_url): ?>
                                         <small><?php echo esc_html(wp_trim_words($row->source_url, 5)); ?></small>
+                                    <?php endif; ?>
+                                    <?php if (!$is_delete && (int) $row->created_rows > 0): ?>
+                                        <a href="<?php echo esc_url(add_query_arg(
+                                            ['page' => ToolsPage::PAGE_SLUG, 'import_id' => (int) $row->id],
+                                            admin_url('admin.php')
+                                        )); ?>">
+                                            <?php esc_html_e('Usuń produkty z tego importu', 'balmo'); ?>
+                                        </a>
                                     <?php endif; ?>
                                 </td>
                             </tr>

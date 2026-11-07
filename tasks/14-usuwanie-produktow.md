@@ -1,11 +1,11 @@
 ---
 id: "14"
-status: blocked
+status: done
 commit: "feat: [14] delete products by integration or import"
 model: średni
 after: ["13"]
-closed: ""
-note: "Decyzje D1–D5 do potwierdzenia; czeka na 13."
+closed: "2026-11-07"
+note: "Wykonane wg propozycji D1–D5; kosz zostawia załączniki, trwałe usunięcie czyści załączniki Balmo."
 ---
 
 # 14 — Usuwanie produktów wg integracji i wg importu
@@ -16,7 +16,7 @@ Klientka chce usunąć ze sklepu wszystkie produkty jednej integracji (np. Colib
 
 Wymaga zadania 13 (taksonomia `balmo_integration`, meta `_balmo_created_import`).
 
-## Decyzje (do potwierdzenia)
+## Decyzje (przyjęte wg propozycji)
 
 | # | Pytanie | Propozycja | Powód |
 |---|---|---|---|

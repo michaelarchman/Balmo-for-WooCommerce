@@ -510,6 +510,99 @@ jQuery(function ($) {
     });
 
     // =========================================================
+    // PAGE: TOOLS (bulk product removal)
+    // =========================================================
+
+    $('.balmo-tools-section').each(function () {
+        var $section  = $(this);
+        var by        = $section.data('by');
+        var expected  = '';
+        var pollTimer = null;
+
+        function value() { return String($section.find('.balmo-tools-source').val() || '').trim(); }
+
+        function resetConfirm() {
+            expected = '';
+            $section.find('.balmo-tools-confirm-wrap').hide();
+            $section.find('.balmo-tools-confirm').val('');
+            $section.find('.balmo-tools-start').prop('disabled', true);
+        }
+
+        $section.find('.balmo-tools-source').on('change input', function () {
+            resetConfirm();
+            $section.find('.balmo-tools-count-result').text('');
+        });
+
+        $section.find('.balmo-tools-count-btn').on('click', function () {
+            resetConfirm();
+            if (!value()) {
+                alert('Wybierz integrację lub podaj ID importu.');
+                return;
+            }
+            $.post(ajaxUrl, { action: 'balmo_tools_count', nonce: nonce, by: by, value: value() }, function (res) {
+                if (!res.success) {
+                    $section.find('.balmo-tools-count-result').text(res.data || 'Błąd.');
+                    return;
+                }
+                $section.find('.balmo-tools-count-result').text('Produktów do usunięcia: ' + res.data.count);
+                if (!res.data.count) return;
+                expected = res.data.expected;
+                $section.find('.balmo-tools-confirm-label').text('Aby potwierdzić, wpisz: ' + expected);
+                $section.find('.balmo-tools-confirm-wrap').show();
+            });
+        });
+
+        $section.find('.balmo-tools-confirm').on('input', function () {
+            $section.find('.balmo-tools-start').prop('disabled', expected === '' || $(this).val().trim() !== expected);
+        });
+
+        $section.find('.balmo-tools-start').on('click', function () {
+            var $btn = $(this);
+            $btn.prop('disabled', true);
+            $.post(ajaxUrl, {
+                action:  'balmo_tools_start',
+                nonce:   nonce,
+                by:      by,
+                value:   value(),
+                force:   $section.find('.balmo-tools-force').is(':checked') ? 1 : 0,
+                confirm: $section.find('.balmo-tools-confirm').val().trim()
+            }, function (res) {
+                if (!res.success) {
+                    alert(res.data || 'Błąd.');
+                    $btn.prop('disabled', false);
+                    return;
+                }
+                resetConfirm();
+                $section.find('.balmo-tools-progress').show();
+                pollRemoval(res.data.import_id);
+            });
+        });
+
+        function pollRemoval(importId) {
+            if (pollTimer) clearInterval(pollTimer);
+            var tick = function () {
+                $.post(ajaxUrl, { action: 'balmo_import_status', nonce: nonce, import_id: importId }, function (res) {
+                    if (!res.success) return;
+                    var d      = res.data;
+                    var total  = d.total_rows || 1;
+                    var done   = d.processed_rows || 0;
+                    var labels = { pending:'Oczekuje…', running:'W toku…', done:'Zakończony ✓', error:'Błąd', cancelled:'Anulowany' };
+                    $section.find('.balmo-tools-bar').val(Math.round(done / total * 100));
+                    $section.find('.balmo-tools-status').text(
+                        (labels[d.status] || d.status) + ' ' + done + ' / ' + total + ', błędy: ' + (d.error_rows || 0)
+                    );
+                    if (d.status === 'done' || d.status === 'error' || d.status === 'cancelled') {
+                        clearInterval(pollTimer);
+                        pollTimer = null;
+                    }
+                });
+            };
+            pollTimer = setInterval(tick, 3000);
+            tick();
+        }
+    });
+
+    // =========================================================
     // HELPERS
     // =========================================================
 
