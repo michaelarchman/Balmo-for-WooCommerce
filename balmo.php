@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Balmo for WooCommerce
  * Description: Import products from CSV, JSON and XML feeds with column mapping, price formulas and scheduling. Handles up to 20,000 products in batches.
- * Version:     1.1.0
+ * Version:     1.2.0
  * Author:      Michał Łuczak
  * Requires at least: 5.0
  * Requires PHP: 8.3
@@ -68,7 +68,7 @@ if (!php_requirement_met()) {
     return;
 }
 
-define('BALMO_VERSION',   '1.1.0');
+define('BALMO_VERSION',   '1.2.0');
 define('BALMO_PLUGIN_FILE', __FILE__);
 define('BALMO_PLUGIN_DIR',  plugin_dir_path(__FILE__));
 define('BALMO_PLUGIN_URL',  plugin_dir_url(__FILE__));
