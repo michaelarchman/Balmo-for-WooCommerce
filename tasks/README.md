@@ -16,9 +16,10 @@
 | 07 | `07-galeria.md` | 2 | todo | 02 |
 | 08 | `08-kategorie-rodzic.md` | 3 | todo | — |
 | 09 | `09-ean-gtin.md` | 3 | blocked | D1–D3 |
-| 10 | `10-wersja-php.md` | 1 | todo | — |
+| 10 | `10-wersja-php.md` | 1 | done 2026-11-07 | — |
 | 11 | `11-komentarze-po-angielsku.md` | 1 | todo | — (samodzielnie, dotyka wszystkich plików) |
 
 ## Drzewo robocze
 
-- Czyste. Kod zadania 02 jest w commicie `30f8f68` (`docs: updated`). Zadanie 02 bez kroków 4–5 i bez `status: done`.
+- Kod zadania 02 jest w commicie `30f8f68` (`docs: updated`). Zadanie 02: `status: done`, zmiany dokumentów do zacommitowania.
+- Zadanie 10: zmiany w `balmo.php`, `docs/architektura.md`, `tasks/10-wersja-php.md`, `tasks/README.md`.

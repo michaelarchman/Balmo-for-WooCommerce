@@ -1,9 +1,9 @@
 ---
 id: "10"
-status: todo
+status: done
 commit: "fix: [10] require php 8.3"
 after: []
-closed: ""
+closed: "2026-11-07"
 note: ""
 ---
 

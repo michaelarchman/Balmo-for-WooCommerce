@@ -5,7 +5,7 @@
  * Version:     1.1.0
  * Author:      Michał Łuczak
  * Requires at least: 5.0
- * Requires PHP: 7.4
+ * Requires PHP: 8.3
  * WC requires at least: 4.0
  * Text Domain: balmo
  */
@@ -21,7 +21,54 @@ use Balmo\Admin\HistoryPage;
 use Balmo\Admin\Settings;
 use Balmo\Cron\ImportScheduler;
 
-define('BALMO_VERSION',     '1.1.0');
+define('BALMO_MIN_PHP', '8.3');
+
+// PHP version guard. Keep everything down to the early return free of syntax newer than PHP 5.6
+// (no scalar types, no ??, no short closures), so it can run on an old interpreter.
+function php_requirement_met()
+{
+    return version_compare(PHP_VERSION, BALMO_MIN_PHP, '>=');
+}
+
+function block_activation_on_old_php()
+{
+    if (php_requirement_met()) {
+        return;
+    }
+
+    deactivate_plugins(plugin_basename(__FILE__));
+    wp_die(
+        sprintf(
+            esc_html__('Balmo for WooCommerce wymaga PHP %1$s lub nowszego. Obecna wersja: %2$s.', 'balmo'),
+            BALMO_MIN_PHP,
+            PHP_VERSION
+        ),
+        '',
+        ['back_link' => true]
+    );
+}
+
+// Registered before activate(), so wp_die() stops activation before any table is created.
+register_activation_hook(__FILE__, __NAMESPACE__ . '\block_activation_on_old_php');
+
+if (!php_requirement_met()) {
+    // Plugin already active, then PHP downgraded: no autoloader, no classes, only a notice.
+    add_action('admin_notices', function () {
+        if (!current_user_can('manage_options')) {
+            return;
+        }
+        echo '<div class="notice notice-error"><p>'
+            . sprintf(
+                esc_html__('Balmo for WooCommerce wymaga PHP %1$s lub nowszego. Obecna wersja: %2$s. Wtyczka jest wyłączona.', 'balmo'),
+                BALMO_MIN_PHP,
+                PHP_VERSION
+            )
+            . '</p></div>';
+    });
+    return;
+}
+
+define('BALMO_VERSION',   '1.1.0');
 define('BALMO_PLUGIN_FILE', __FILE__);
 define('BALMO_PLUGIN_DIR',  plugin_dir_path(__FILE__));
 define('BALMO_PLUGIN_URL',  plugin_dir_url(__FILE__));

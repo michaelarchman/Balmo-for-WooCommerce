@@ -4,13 +4,11 @@
 
 | Co | Wersja |
 |---|---|
-| PHP | nagłówek `balmo.php:8`: 7.4; kod: składnia 8.0 (`match`, `str_starts_with`, typy unii) → `tasks/10-wersja-php.md` |
+| PHP | 8.3+ (nagłówek `balmo.php:8`, blokada aktywacji) |
 | WordPress | 5.0+ |
 | WooCommerce | 4.0+ |
 | Action Scheduler | z WooCommerce |
 | Composer / npm / PHPUnit | brak |
-
-- Nowy kod: bez składni PHP 8.0 (do zamknięcia zadania 10).
 
 ## Pliki
 
