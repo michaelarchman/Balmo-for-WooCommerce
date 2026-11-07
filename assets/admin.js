@@ -318,6 +318,11 @@ jQuery(function ($) {
         $('#balmo-mapping-integration-new').toggle($(this).val() === 'new');
     });
 
+    // Sweeping applies to full imports only
+    $('#balmo-mapping-source-type').on('change', function () {
+        $('#balmo-missing-action-row').toggle($(this).val() !== 'ica');
+    });
+
     $('#balmo-btn-save-mapping').on('click', function () {
         var id          = $('#balmo-mapping-id').val();
         var name            = $('#balmo-mapping-name').val().trim();
@@ -330,6 +335,7 @@ jQuery(function ($) {
         var variantSuffixes = $('#balmo-variant-suffixes').val();
         var integrationId   = $('#balmo-mapping-integration').val();
         var integrationNew  = $('#balmo-mapping-integration-new').val().trim();
+        var missingAction   = $('#balmo-missing-action').val();
 
         if (!name) { alert('Podaj nazwę profilu.'); return; }
 
@@ -373,7 +379,8 @@ jQuery(function ($) {
             group_variants:   groupVariants,
             variant_suffixes: variantSuffixes,
             integration_id:   integrationId,
-            integration_new:  integrationNew
+            integration_new:  integrationNew,
+            missing_action:   missingAction
         }, function (res) {
             if (res.success) {
                 if (typeof res.data.id !== 'undefined') {

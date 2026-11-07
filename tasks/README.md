@@ -21,7 +21,7 @@
 | 12 | `12-nazwa-import.md` | 1 | todo | lekki | — |
 | 13 | `13-integracja-produktu.md` | 4 | done 2026-11-07 | średni | — |
 | 14 | `14-usuwanie-produktow.md` | 4 | done 2026-11-07 | średni | — |
-| 16 | `16-sprzatanie-integracji.md` | 4 | blocked | średni | D1–D6 |
+| 16 | `16-sprzatanie-integracji.md` | 4 | done 2026-11-07 | średni | — |
 | 17 | `17-audyt-produktow.md` | 5 | blocked | średni | D1–D3, 13, 16 |
 
 ## Drzewo robocze

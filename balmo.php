@@ -136,6 +136,8 @@ function activate(): void
             current_offset INT UNSIGNED     NOT NULL DEFAULT 0,
             file_path      TEXT             NULL,
             variant_bases  LONGTEXT         NULL,
+            swept_rows     INT UNSIGNED     NOT NULL DEFAULT 0,
+            sweep_note     VARCHAR(255)     NULL,
             delimiter      VARCHAR(5)       NOT NULL DEFAULT ',',
             started_at     DATETIME         NULL,
             finished_at    DATETIME         NULL,
@@ -177,6 +179,7 @@ function activate(): void
             variant_suffixes TEXT          NULL,
             source_currency VARCHAR(3)     NOT NULL DEFAULT '',
             integration_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+            missing_action VARCHAR(10)     NOT NULL DEFAULT 'none',
             created_at    DATETIME         NOT NULL DEFAULT CURRENT_TIMESTAMP,
             updated_at    DATETIME         NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             PRIMARY KEY (id)
@@ -196,7 +199,7 @@ function activate(): void
     add_option('balmo_image_mode',       'none');
     add_option('balmo_default_status',   'publish');
     add_option('balmo_log_retention',    30);
-    update_option('balmo_db_version',    '1.6');
+    update_option('balmo_db_version',    '1.7');
 }
 register_activation_hook(BALMO_PLUGIN_FILE, __NAMESPACE__ . '\activate');
 
@@ -232,6 +235,12 @@ function maybe_migrate_db(): void
     }
     if (!in_array('variant_bases', $import_log_cols, true)) {
         $wpdb->query("ALTER TABLE `" . table_import_log() . "` ADD COLUMN `variant_bases` LONGTEXT NULL");
+    }
+    if (!in_array('swept_rows', $import_log_cols, true)) {
+        $wpdb->query("ALTER TABLE `" . table_import_log() . "` ADD COLUMN `swept_rows` INT UNSIGNED NOT NULL DEFAULT 0");
+    }
+    if (!in_array('sweep_note', $import_log_cols, true)) {
+        $wpdb->query("ALTER TABLE `" . table_import_log() . "` ADD COLUMN `sweep_note` VARCHAR(255) NULL");
     }
     if (!in_array('start_offset', $import_log_cols, true)) {
         $wpdb->query("ALTER TABLE `" . table_import_log() . "` ADD COLUMN `start_offset` INT UNSIGNED NOT NULL DEFAULT 0 AFTER `error_rows`");
@@ -270,7 +279,12 @@ function maybe_migrate_db(): void
         $wpdb->query("ALTER TABLE `" . table_mappings() . "` ADD COLUMN `integration_id` BIGINT UNSIGNED NOT NULL DEFAULT 0");
     }
 
-    update_option('balmo_db_version', '1.6');
+    // Existing profiles keep 'none': an update never removes products without a decision
+    if (!in_array('missing_action', $mappings_cols, true)) {
+        $wpdb->query("ALTER TABLE `" . table_mappings() . "` ADD COLUMN `missing_action` VARCHAR(10) NOT NULL DEFAULT 'none'");
+    }
+
+    update_option('balmo_db_version', '1.7');
 }
 
 function get_background_batch_size(): int
@@ -334,6 +348,7 @@ function clear_offset_attempts(int $import_id, int $offset): void
  */
 add_action(\Balmo\Service\RelatedResolver::ACTION, [\Balmo\Service\RelatedResolver::class, 'run'], 10, 2);
 add_action(ProductRemover::ACTION, [ProductRemover::class, 'runBatch'], 10, 4);
+add_action(\Balmo\Service\IntegrationSweeper::ACTION, [\Balmo\Service\IntegrationSweeper::class, 'runBatch'], 10, 2);
 
 add_action('balmo_as_batch', function (int $import_id, int $offset): void {
     global $wpdb;
@@ -391,6 +406,7 @@ add_action('balmo_as_batch', function (int $import_id, int $offset): void {
         if ($is_done) {
             clear_import_heartbeat($import_id);
             \Balmo\Service\RelatedResolver::schedule($import_id);
+            \Balmo\Service\IntegrationSweeper::schedule($import_id);
             return;
         }
 
@@ -504,6 +520,7 @@ add_action('balmo_as_batch', function (int $import_id, int $offset): void {
         @unlink($file_path);
         clear_import_heartbeat($import_id);
         \Balmo\Service\RelatedResolver::schedule($import_id);
+        \Balmo\Service\IntegrationSweeper::schedule($import_id);
         return;
     }
 

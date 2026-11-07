@@ -1,11 +1,11 @@
 ---
 id: "16"
-status: blocked
+status: done
 commit: "feat: [16] sweep integration products missing from full feed"
 model: średni
 after: ["13", "14"]
-closed: ""
-note: "Decyzje D1–D6 do potwierdzenia; czeka na 13 i 14."
+closed: "2026-11-07"
+note: "D1–D6 przyjęte wg propozycji (Wykonaj). Dodane poza zakresem: ImportPage (4. wywołanie schedule, markPartial), kolumna sweep_note."
 ---
 
 # 16 — Sprzątanie po imporcie pełnym (garbage collector integracji)

@@ -307,6 +307,10 @@ class ImportPage
             return;
         }
 
+        if ($start_row > 1 || $end_row < $total_rows) {
+            \Balmo\Service\IntegrationSweeper::markPartial($import_id);
+        }
+
         // Check that Action Scheduler is available (bundled with WooCommerce)
         if (!function_exists('as_enqueue_async_action')) {
             $wpdb->update(table_import_log(), ['status' => 'error'], ['id' => $import_id]);
@@ -407,6 +411,7 @@ class ImportPage
         if ($is_done) {
             @unlink($file_path);
             \Balmo\Service\RelatedResolver::schedule($import_id);
+            \Balmo\Service\IntegrationSweeper::schedule($import_id);
         }
 
         wp_send_json_success([

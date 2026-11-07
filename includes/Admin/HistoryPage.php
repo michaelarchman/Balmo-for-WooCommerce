@@ -112,6 +112,12 @@ class HistoryPage
                                     <?php if ($row->source_url): ?>
                                         <small><?php echo esc_html(wp_trim_words($row->source_url, 5)); ?></small>
                                     <?php endif; ?>
+                                    <?php if ((int) ($row->swept_rows ?? 0) > 0): ?>
+                                        <br><?php echo esc_html(sprintf(__('Usunięte z integracji: %d', 'balmo'), (int) $row->swept_rows)); ?>
+                                    <?php endif; ?>
+                                    <?php if (!empty($row->sweep_note)): ?>
+                                        <br><small><?php echo esc_html($row->sweep_note); ?></small>
+                                    <?php endif; ?>
                                     <?php if (!$is_delete && (int) $row->created_rows > 0): ?>
                                         <a href="<?php echo esc_url(add_query_arg(
                                             ['page' => ToolsPage::PAGE_SLUG, 'import_id' => (int) $row->id],

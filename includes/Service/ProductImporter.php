@@ -18,6 +18,7 @@ class ProductImporter
     private string  $import_mode;
     private string  $expected_currency;
     private int     $integration_id;
+    private bool    $mark_seen = false; // full import of a profile that sweeps missing products
     private int     $current_row  = 0;
     private array   $current_data = [];
 
@@ -43,6 +44,9 @@ class ProductImporter
         $this->import_mode  = $log->import_mode ?? 'full';
         $this->expected_currency = self::expectedCurrency($mapping);
         $this->integration_id    = Integration::forMapping($mapping);
+        $this->mark_seen         = $this->import_mode === 'full'
+            && $this->integration_id > 0
+            && IntegrationSweeper::actionFor($mapping) !== 'none';
 
         if ($mapping && !empty($mapping->group_variants) && $this->import_mode !== 'update') {
             $suffixes = json_decode((string) ($mapping->variant_suffixes ?? ''), true);
@@ -127,6 +131,7 @@ class ProductImporter
             } catch (\Throwable $e) {
                 $this->logError($row_num, $data, $e->getMessage());
                 $stats['errors']++;
+                $this->markSeenByRow($data);
             }
 
             $stats['processed']++;
@@ -164,6 +169,7 @@ class ProductImporter
                 $row_currency,
                 $this->expected_currency
             ));
+            $this->markSeenByRow($data);
             return 'skipped';
         }
 
@@ -176,6 +182,7 @@ class ProductImporter
                 __('Wiersz pominięty — nieprawidłowe wartości w kolumnach bez nadpisania: %s', 'balmo'),
                 $cols
             ));
+            $this->markSeenByRow($data);
             return 'skipped';
         }
 
@@ -186,6 +193,9 @@ class ProductImporter
         $sku        = $data['product_code'] ?? $mapped['_sku'] ?? '';
         $ext_id     = (int) ($data['product_id'] ?? 0);
         $product_id = $this->findProduct($match_by, $sku, $ext_id);
+        if ($product_id) {
+            $this->restoreIfHidden($product_id);
+        }
 
         // A variation is never updated as a standalone product (title and content belong to the parent)
         if ($product_id && get_post_type($product_id) === 'product_variation') {
@@ -224,6 +234,58 @@ class ProductImporter
 
         $this->createProduct($mapped, $data);
         return 'created';
+    }
+
+    // Tag a product with its integration and import; a full import of a sweeping profile also stamps it as seen
+    private function tagProduct(int $post_id, bool $is_new): void
+    {
+        Integration::tag($post_id, $this->integration_id, $this->import_id, $is_new);
+
+        if ($this->mark_seen) {
+            update_post_meta($post_id, IntegrationSweeper::META_SEEN, (string) $this->import_id);
+        }
+    }
+
+    // A row that was skipped or failed is still in the feed: its product (and parent) must not be swept (D4)
+    private function markSeenByRow(array $data): void
+    {
+        if (!$this->mark_seen) return;
+
+        try {
+            $product_id = $this->findProduct(
+                $this->mapper->getMatchBy(),
+                trim((string) ($data['product_code'] ?? '')),
+                (int) ($data['product_id'] ?? 0)
+            );
+            if (!$product_id) return;
+
+            update_post_meta($product_id, IntegrationSweeper::META_SEEN, (string) $this->import_id);
+            $parent_id = (int) wp_get_post_parent_id($product_id);
+            if ($parent_id > 0) {
+                update_post_meta($parent_id, IntegrationSweeper::META_SEEN, (string) $this->import_id);
+            }
+        } catch (\Throwable $e) {
+            // The row is already logged; a failed stamp only leaves the product open to the sweep
+        }
+    }
+
+    // Profile with missing_action = draft: a product hidden by an earlier sweep is published again when it returns to the feed (D6)
+    private function restoreIfHidden(int $post_id): void
+    {
+        if (IntegrationSweeper::actionFor($this->mapping) !== 'draft') return;
+
+        $ids = [$post_id];
+        $parent_id = (int) wp_get_post_parent_id($post_id);
+        if ($parent_id > 0) {
+            $ids[] = $parent_id;
+        }
+
+        foreach ($ids as $id) {
+            if (get_post_meta($id, IntegrationSweeper::META_HIDDEN, true) !== 'missing') continue;
+
+            wp_update_post(['ID' => $id, 'post_status' => 'publish']);
+            delete_post_meta($id, IntegrationSweeper::META_HIDDEN);
+        }
     }
 
     // Find existing WC product by SKU or external ID meta
@@ -275,7 +337,7 @@ class ProductImporter
         wp_set_object_terms($post_id, $type, 'product_type');
 
         $this->saveProductMeta($post_id, $mapped, $raw, true);
-        Integration::tag((int) $post_id, $this->integration_id, $this->import_id, true);
+        $this->tagProduct((int) $post_id, true);
 
         return (int) $post_id;
     }
@@ -305,7 +367,7 @@ class ProductImporter
         }
 
         $this->saveProductMeta($product_id, $mapped, $raw, false);
-        Integration::tag($product_id, $this->integration_id, $this->import_id, false);
+        $this->tagProduct($product_id, false);
     }
 
     // Save WooCommerce product meta fields
@@ -539,7 +601,7 @@ class ProductImporter
 
         $this->ensureVariationAttribute($parent_id);
         $this->saveVariation(0, $parent_id, $sku, $suffix, $mapped);
-        Integration::tag($parent_id, $this->integration_id, $this->import_id, false);
+        $this->tagProduct($parent_id, false);
         $this->syncVariantParent($parent_id);
     }
 
@@ -616,7 +678,7 @@ class ProductImporter
 
         $parent_id = $variation->get_parent_id();
         $this->saveVariation($variation_id, $parent_id, (string) $variation->get_sku(), '', $mapped);
-        Integration::tag($parent_id, $this->integration_id, $this->import_id, false);
+        $this->tagProduct($parent_id, false);
         $this->syncVariantParent($parent_id);
     }
 
@@ -682,7 +744,7 @@ class ProductImporter
         }
 
         $saved_id = (int) $variation->save();
-        Integration::tag($saved_id, $this->integration_id, $this->import_id, $is_new);
+        $this->tagProduct($saved_id, $is_new);
     }
 
     // Recalculate parent price and stock; a parent without active variations goes to draft

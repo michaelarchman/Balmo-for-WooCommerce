@@ -14,7 +14,7 @@
 
 | Ścieżka | Zawiera |
 |---|---|
-| `balmo.php` | stałe, autoloader PSR-4 (`Balmo\*` → `includes/`), schemat DB (`dbDelta`), hooki, handler transz `balmo_as_batch`, hook `balmo_delete_batch` |
+| `balmo.php` | stałe, autoloader PSR-4 (`Balmo\*` → `includes/`), schemat DB (`dbDelta`), hooki, handler transz `balmo_as_batch`, hooki `balmo_delete_batch`, `balmo_sweep_batch` |
 | `includes/Admin/` | ekrany wp-admin, AJAX |
 | `includes/Service/` | pobieranie, konwersja, walidacja, mapowanie, import |
 | `includes/Cron/` | harmonogramy WP-Cron |
@@ -63,6 +63,7 @@
 | `Service\RelatedResolver` | po imporcie pełnym: meta `_balmo_related_ext` (ID hurtowni) → `_upsell_ids`; akcja AS `balmo_resolve_related`, porcje po 200 |
 | `Admin\ToolsPage` | podmenu „Narzędzia”: usuwanie produktów wg integracji / wg importu; AJAX `balmo_tools_count`, `balmo_tools_start`; potwierdzenie = wpisanie nazwy integracji albo ID importu (sprawdzane po stronie serwera); status przez `balmo_import_status` |
 | `Service\ProductRemover` | usuwanie w tle: `count()`, `schedule()` (rekord `balmo_import_log` z `import_mode = 'delete'` + akcja AS `balmo_delete_batch` `[log_id, by, value, force]`), `runBatch()` (50 produktów / akcja, limit `BALMO_BATCH_TIME_LIMIT`, porcja wybierana od nowa bez offsetu, produkty w koszu pomijane), `deleteProduct()` (publiczna). Kosz: produkt + wariacje. Trwale (`force`): wariacje, produkt, załączniki z `_balmo_external_url` (rodzic w produkcie albo zdjęcie główne/galeria), które nie są używane przez inny post. Partia bez żadnego usunięcia przy nadal pasujących produktach = `status = error` |
+| `Service\IntegrationSweeper` | mark and sweep po imporcie pełnym: `schedule()` (wołana obok `RelatedResolver::schedule` w 4 miejscach: `balmo.php` ×2, `ImportScheduler`, `ImportPage`), `runBatch()` (akcja AS `balmo_sweep_batch` `[import_id, after_id]`, 50 produktów i wariacji / akcja, kursor po ID), `markPartial()` (import zakresu wierszy nie sprząta). Akcja z opcji profilu `missing_action`: `trash` → `ProductRemover::deleteProduct(false)`, `delete` → `deleteProduct(true)`, `draft` → produkt `draft` / wariacja `private` + meta `_balmo_hidden = missing` |
 | `Cron\ImportScheduler` | harmonogramy w opcji `balmo_schedules`, `execute()` |
 
 ## Przepływ importu
@@ -88,15 +89,26 @@
 | profil z `integration_id = 0` | import bez termu; meta importu zapisywane |
 | produkt bez termu | „Bez integracji” |
 
+## Sprzątanie po imporcie pełnym
+
+| Element | Wartość |
+|---|---|
+| meta `_balmo_seen_full` | ID importu pełnego, w którym produkt był w pliku; `ProductImporter::tagProduct` (produkt, wariacja, rodzic), tylko gdy `import_mode = full`, integracja ≠ 0 i `missing_action ≠ none`; wiersz pominięty (walidacja, waluta) albo z wyjątkiem: `markSeenByRow` po surowym `product_code` / `product_id` |
+| meta `_balmo_hidden` | `missing` = produkt ukryty przez sweep (`draft`); `restoreIfHidden` przy ponownym dopasowaniu → `publish`, meta usunięta |
+| opcja profilu `missing_action` | `none` (domyślnie), `draft`, `trash`, `delete` |
+| zbiór do sprzątnięcia | produkty i wariacje z termem integracji profilu, poza koszem, bez `_balmo_seen_full = import_id` |
+| bezpiecznik | brak sweepu, gdy: status ≠ `done`; `start_offset > 0` albo import zakresu; `processed_rows < total_rows`; `error_rows` > 10% `total_rows`; `total_rows` < 50% produktów integracji; profil bez integracji. Powód w `balmo_import_log.sweep_note` (Historia) |
+| wynik | `balmo_import_log.swept_rows`; błędy sweepu w `balmo_import_errors` (`row_number = 0`) |
+
 ## Tabele
 
 | Tabela | Zawiera |
 |---|---|
-| `{prefix}balmo_import_log` | import albo usuwanie (`import_mode = 'delete'`: `total_rows` = liczba produktów, `processed_rows` = usunięte, `source_url` = opis zadania): status, liczniki, offsety, plik, separator, `variant_bases` (kody bazowe par wariantów) |
+| `{prefix}balmo_import_log` | import albo usuwanie (`import_mode = 'delete'`: `total_rows` = liczba produktów, `processed_rows` = usunięte, `source_url` = opis zadania): status, liczniki, offsety, plik, separator, `variant_bases` (kody bazowe par wariantów), `swept_rows` (sprzątnięte po imporcie pełnym), `sweep_note` (powód pominięcia sweepu) |
 | `{prefix}balmo_import_errors` | błąd wiersza: numer, dane (max 10 pól), komunikat |
-| `{prefix}balmo_mappings` | profil: `format`, `source_type`, `image_url_prefix`, `column_map`, `overrides`, `price_formula`, `match_by`, `update_fields`, `group_variants`, `variant_suffixes`, `source_currency`, `integration_id` (term_id `balmo_integration`, `0` = brak) |
+| `{prefix}balmo_mappings` | profil: `format`, `source_type`, `image_url_prefix`, `column_map`, `overrides`, `price_formula`, `match_by`, `update_fields`, `group_variants`, `variant_suffixes`, `source_currency`, `integration_id` (term_id `balmo_integration`, `0` = brak), `missing_action` (`none` / `draft` / `trash` / `delete`) |
 
-- `balmo_db_version` = `1.6`.
+- `balmo_db_version` = `1.7`.
 - Zmiana schematu: `dbDelta` w `balmo.php`, domyślne wartości = obecne zachowanie.
 
 ## Konwencje kodu

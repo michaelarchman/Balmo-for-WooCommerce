@@ -5,6 +5,7 @@ namespace Balmo\Admin;
 if (!defined('ABSPATH')) exit;
 
 use Balmo\Service\Integration;
+use Balmo\Service\IntegrationSweeper;
 
 class MappingPage
 {
@@ -252,6 +253,7 @@ class MappingPage
         $source_currency  = $m->source_currency  ?? '';
         $integration_id   = (int) ($m->integration_id ?? 0);
         $integrations     = Integration::terms();
+        $missing_action   = IntegrationSweeper::actionFor($m);
         $group_variants   = !empty($m->group_variants);
         $variant_suffixes = self::variantSuffixesToText($m->variant_suffixes ?? '');
         $column_map       = $m ? (json_decode($m->column_map,    true) ?: []) : [];
@@ -290,6 +292,18 @@ class MappingPage
                         <input type="text" id="balmo-mapping-integration-new" class="regular-text" style="display:none;"
                                placeholder="<?php esc_attr_e('Nazwa nowej integracji', 'balmo'); ?>">
                         <p class="description"><?php esc_html_e('Dostawca produktów (np. Colibra). Produkty z tego profilu dostają tę integrację; widoczna tylko w panelu.', 'balmo'); ?></p>
+                    </td>
+                </tr>
+                <tr id="balmo-missing-action-row" <?php echo $source_type === 'ica' ? 'style="display:none;"' : ''; ?>>
+                    <th><label for="balmo-missing-action"><?php esc_html_e('Produkty, których nie ma w imporcie pełnym', 'balmo'); ?></label></th>
+                    <td>
+                        <select id="balmo-missing-action">
+                            <option value="none" <?php selected($missing_action, 'none'); ?>><?php esc_html_e('Nie rób nic', 'balmo'); ?></option>
+                            <option value="draft" <?php selected($missing_action, 'draft'); ?>><?php esc_html_e('Ukryj (szkic)', 'balmo'); ?></option>
+                            <option value="trash" <?php selected($missing_action, 'trash'); ?>><?php esc_html_e('Przenieś do kosza', 'balmo'); ?></option>
+                            <option value="delete" <?php selected($missing_action, 'delete'); ?>><?php esc_html_e('Usuń trwale', 'balmo'); ?></option>
+                        </select>
+                        <p class="description"><?php esc_html_e('Dotyczy produktów tej integracji po imporcie pełnym. Pomijane, gdy plik jest obcięty, import przerwany albo ma dużo błędów. Import ICA niczego nie usuwa.', 'balmo'); ?></p>
                     </td>
                 </tr>
                 <tr>
@@ -486,6 +500,10 @@ class MappingPage
         if (!array_key_exists($source_currency, get_woocommerce_currencies())) {
             $source_currency = '';
         }
+        $missing_action   = sanitize_key($_POST['missing_action'] ?? 'none');
+        if (!in_array($missing_action, IntegrationSweeper::ACTIONS, true)) {
+            $missing_action = 'none';
+        }
         $group_variants   = !empty($_POST['group_variants']) ? 1 : 0;
         $variant_suffixes = self::parseVariantSuffixes((string) wp_unslash($_POST['variant_suffixes'] ?? ''));
 
@@ -520,6 +538,7 @@ class MappingPage
             'update_fields'    => wp_json_encode($update_fields),
             'source_currency'  => $source_currency,
             'integration_id'   => $integration_id,
+            'missing_action'   => $missing_action,
             'group_variants'   => $group_variants,
             'variant_suffixes' => wp_json_encode($variant_suffixes, JSON_UNESCAPED_UNICODE),
         ];
@@ -665,6 +684,7 @@ class MappingPage
             'update_fields'    => json_decode($m->update_fields, true) ?: [],
             'source_currency'  => $m->source_currency ?? '',
             'integration_id'   => (int) ($m->integration_id ?? 0),
+            'missing_action'   => IntegrationSweeper::actionFor($m),
             'group_variants'   => !empty($m->group_variants),
             'variant_suffixes' => self::variantSuffixesToText($m->variant_suffixes ?? ''),
         ]);
