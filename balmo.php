@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Balmo for WooCommerce
  * Description: Import products from CSV, JSON and XML feeds with column mapping, price formulas and scheduling. Handles up to 20,000 products in batches.
- * Version:     1.2.0
+ * Version:     1.3.0
  * Author:      Michał Łuczak
  * Requires at least: 5.0
  * Requires PHP: 8.3
@@ -72,7 +72,7 @@ if (!php_requirement_met()) {
     return;
 }
 
-define('BALMO_VERSION',   '1.2.0');
+define('BALMO_VERSION',   '1.3.0');
 define('BALMO_PLUGIN_FILE', __FILE__);
 define('BALMO_PLUGIN_DIR',  plugin_dir_path(__FILE__));
 define('BALMO_PLUGIN_URL',  plugin_dir_url(__FILE__));
@@ -374,6 +374,26 @@ add_action('balmo_as_batch', function (int $import_id, int $offset): void {
     if ($attempts >= 3 && (!is_array($heartbeat) || (int) ($heartbeat['offset'] ?? $offset) <= $offset)) {
         $row_number = (int) ($heartbeat['row_number'] ?? ($offset + 1));
         $identifier = trim((string) ($heartbeat['sku'] ?? $heartbeat['product_id'] ?? ''));
+
+        // The skipped row is still in the feed: stamp its product so a sweep keeps it
+        if ($log->import_mode === 'full' && is_array($heartbeat)) {
+            try {
+                $skipped_mapping = $log->mapping_id
+                    ? $wpdb->get_row($wpdb->prepare(
+                        "SELECT * FROM " . table_mappings() . " WHERE id = %d", (int) $log->mapping_id
+                    ))
+                    : null;
+                \Balmo\Service\ProductImporter::markSeen(
+                    $import_id,
+                    $log,
+                    $skipped_mapping,
+                    (string) ($heartbeat['sku'] ?? ''),
+                    (int) ($heartbeat['product_id'] ?? 0)
+                );
+            } catch (\Throwable $e) {
+                // Best effort: without the stamp the product only stays open to the sweep
+            }
+        }
 
         $wpdb->insert(table_import_errors(), [
             'import_id'     => $import_id,
