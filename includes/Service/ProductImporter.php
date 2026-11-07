@@ -286,9 +286,14 @@ class ProductImporter
             update_post_meta($post_id, '_product_id_ext', sanitize_text_field($mapped['_product_id_ext']));
         }
 
-        // EAN
+        // EAN: custom meta always, native GTIN is set with the product save below
+        $gtin = '';
         if (isset($mapped['_ean'])) {
-            update_post_meta($post_id, '_ean', sanitize_text_field($mapped['_ean']));
+            $ean = sanitize_text_field($mapped['_ean']);
+            update_post_meta($post_id, '_ean', $ean);
+            if (preg_match('/^(\d{8}|\d{12,14})$/', $ean)) {
+                $gtin = $ean;
+            }
         }
 
         // Producer
@@ -323,9 +328,12 @@ class ProductImporter
         wc_delete_product_transients($post_id);
 
         // Recalculate prices (required by WC)
-        if ($is_new || isset($mapped['_regular_price'])) {
+        if ($is_new || isset($mapped['_regular_price']) || $gtin !== '') {
             $product = wc_get_product($post_id);
             if ($product) {
+                if ($gtin !== '') {
+                    $this->applyGtin($product, $gtin);
+                }
                 $product->save();
             }
         }
@@ -333,6 +341,35 @@ class ProductImporter
         // Attributes: after saving the price, so they work on a fresh product object
         if (isset($mapped['_attributes'])) {
             $this->assignAttributes($post_id, $mapped['_attributes']);
+        }
+    }
+
+    // Native GTIN (WooCommerce 9.2+). A duplicate is logged and skipped; the row is still imported.
+    private function applyGtin(\WC_Product $product, string $gtin): void
+    {
+        if (!method_exists($product, 'set_global_unique_id')) return;
+        if ($product->get_global_unique_id() === $gtin) return;
+
+        $owner = function_exists('wc_get_product_id_by_global_unique_id')
+            ? (int) wc_get_product_id_by_global_unique_id($gtin)
+            : 0;
+        if ($owner > 0 && $owner !== $product->get_id()) {
+            $this->logError($this->current_row, $this->current_data, sprintf(
+                __('EAN %1$s jest już przypisany do produktu %2$d — GTIN pominięty.', 'balmo'),
+                $gtin,
+                $owner
+            ));
+            return;
+        }
+
+        try {
+            $product->set_global_unique_id($gtin);
+        } catch (\WC_Data_Exception $e) {
+            $this->logError($this->current_row, $this->current_data, sprintf(
+                __('EAN %1$s: GTIN pominięty — %2$s', 'balmo'),
+                $gtin,
+                $e->getMessage()
+            ));
         }
     }
 

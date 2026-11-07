@@ -86,6 +86,9 @@ class MappingPage
     ];
 
     // WC_FIELDS + extra images 2 … BALMO_MAX_GALLERY_IMAGES + 1, right after the main image
+    // Finish suffix => value of the "Wykończenie" attribute; the first suffix is the primary variant
+    public const DEFAULT_VARIANT_SUFFIXES = ['AU' => 'złote', 'AG' => 'srebrne'];
+
     public static function wcFields(): array
     {
         $fields = [];
@@ -233,6 +236,8 @@ class MappingPage
         $match_by         = $m->match_by         ?? 'sku';
         $price_formula    = $m->price_formula    ?? '';
         $image_url_prefix = $m->image_url_prefix ?? '';
+        $group_variants   = !empty($m->group_variants);
+        $variant_suffixes = self::variantSuffixesToText($m->variant_suffixes ?? '');
         $column_map       = $m ? (json_decode($m->column_map,    true) ?: []) : [];
         $overrides        = $m ? (json_decode($m->overrides,     true) ?: []) : [];
         $update_fields    = $m ? (json_decode($m->update_fields, true) ?: ['_regular_price', '_stock', 'post_status']) : ['_regular_price', '_stock', 'post_status'];
@@ -333,6 +338,22 @@ class MappingPage
                    value="<?php echo esc_attr($image_url_prefix); ?>"
                    placeholder="https://drop.seltu.pl">
 
+            <h3><?php esc_html_e('Warianty produktów', 'balmo'); ?></h3>
+            <p>
+                <label>
+                    <input type="checkbox" id="balmo-group-variants" <?php checked($group_variants); ?>>
+                    <?php esc_html_e('Grupuj kody z sufiksem (np. P14798AU / P14798AG) w produkt wariantowy', 'balmo'); ?>
+                </label>
+            </p>
+            <p class="description">
+                <?php esc_html_e('Grupowanie działa tylko w imporcie pełnym i tylko gdy w pliku są oba kody pary. Istniejące produkty proste nie są konwertowane.', 'balmo'); ?>
+            </p>
+            <textarea id="balmo-variant-suffixes" rows="3" class="regular-text"
+                      placeholder="AU=złote&#10;AG=srebrne"><?php echo esc_textarea($variant_suffixes); ?></textarea>
+            <p class="description">
+                <?php esc_html_e('Sufiks=wartość atrybutu "Wykończenie", jedna para na linię. Pierwszy sufiks wyznacza wariant, z którego pochodzą dane rodzica.', 'balmo'); ?>
+            </p>
+
             <h3><?php esc_html_e('Pola do aktualizacji', 'balmo'); ?></h3>
             <p class="description"><?php esc_html_e('Które pola nadpisywać przy imporcie aktualizacyjnym (ICA / tryb "tylko aktualizuj").', 'balmo'); ?></p>
             <?php
@@ -416,6 +437,8 @@ class MappingPage
         $column_map       = $_POST['column_map']   ?? [];
         $overrides        = $_POST['overrides']    ?? [];
         $update_fields    = $_POST['update_fields'] ?? [];
+        $group_variants   = !empty($_POST['group_variants']) ? 1 : 0;
+        $variant_suffixes = self::parseVariantSuffixes((string) wp_unslash($_POST['variant_suffixes'] ?? ''));
 
         if (empty($name)) {
             wp_send_json_error(__('Podaj nazwę profilu.', 'balmo'));
@@ -437,9 +460,12 @@ class MappingPage
             'column_map'       => wp_json_encode($column_map),
             'overrides'        => wp_json_encode($overrides),
             'update_fields'    => wp_json_encode($update_fields),
+            'group_variants'   => $group_variants,
+            'variant_suffixes' => wp_json_encode($variant_suffixes, JSON_UNESCAPED_UNICODE),
         ];
 
         $formats = array_fill(0, count($data), '%s');
+        $formats[array_search('group_variants', array_keys($data), true)] = '%d';
 
         if ($id > 0) {
             $updated = $wpdb->update(\Balmo\table_mappings(), $data, ['id' => $id], $formats, ['%d']);
@@ -463,6 +489,36 @@ class MappingPage
                 'message' => __('Profil zapisany.', 'balmo'),
             ]);
         }
+    }
+
+    // "AU=złote" lines to ['AU' => 'złote']; no valid line gives the defaults
+    public static function parseVariantSuffixes(string $text): array
+    {
+        $suffixes = [];
+        foreach (preg_split('/\R/', $text) as $line) {
+            $parts  = explode('=', $line, 2);
+            $suffix = strtoupper(preg_replace('/[^A-Za-z0-9]/', '', $parts[0]));
+            $value  = sanitize_text_field($parts[1] ?? '');
+            if ($suffix !== '' && $value !== '') {
+                $suffixes[$suffix] = $value;
+            }
+        }
+
+        return $suffixes ?: self::DEFAULT_VARIANT_SUFFIXES;
+    }
+
+    private static function variantSuffixesToText($json): string
+    {
+        $suffixes = json_decode((string) $json, true);
+        if (!is_array($suffixes) || !$suffixes) {
+            $suffixes = self::DEFAULT_VARIANT_SUFFIXES;
+        }
+
+        $lines = [];
+        foreach ($suffixes as $suffix => $value) {
+            $lines[] = $suffix . '=' . $value;
+        }
+        return implode("\n", $lines);
     }
 
     private static function sanitizeImageUrlPrefix($value): string
@@ -518,6 +574,8 @@ class MappingPage
             'column_map'       => json_decode($m->column_map, true) ?: [],
             'overrides'        => json_decode($m->overrides,  true) ?: [],
             'update_fields'    => json_decode($m->update_fields, true) ?: [],
+            'group_variants'   => !empty($m->group_variants),
+            'variant_suffixes' => self::variantSuffixesToText($m->variant_suffixes ?? ''),
         ]);
     }
 

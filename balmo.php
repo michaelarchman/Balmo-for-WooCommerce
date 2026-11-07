@@ -132,6 +132,7 @@ function activate(): void
             end_offset     INT UNSIGNED     NOT NULL DEFAULT 0,
             current_offset INT UNSIGNED     NOT NULL DEFAULT 0,
             file_path      TEXT             NULL,
+            variant_bases  LONGTEXT         NULL,
             delimiter      VARCHAR(5)       NOT NULL DEFAULT ',',
             started_at     DATETIME         NULL,
             finished_at    DATETIME         NULL,
@@ -169,6 +170,8 @@ function activate(): void
             price_formula VARCHAR(500)     NULL,
             match_by      VARCHAR(10)      NOT NULL DEFAULT 'sku',
             update_fields LONGTEXT         NULL,
+            group_variants TINYINT(1)      NOT NULL DEFAULT 0,
+            variant_suffixes TEXT          NULL,
             created_at    DATETIME         NOT NULL DEFAULT CURRENT_TIMESTAMP,
             updated_at    DATETIME         NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             PRIMARY KEY (id)
@@ -188,7 +191,7 @@ function activate(): void
     add_option('balmo_image_mode',       'none');
     add_option('balmo_default_status',   'publish');
     add_option('balmo_log_retention',    30);
-    update_option('balmo_db_version',    '1.3');
+    update_option('balmo_db_version',    '1.4');
 }
 register_activation_hook(BALMO_PLUGIN_FILE, __NAMESPACE__ . '\activate');
 
@@ -222,6 +225,9 @@ function maybe_migrate_db(): void
     if (!in_array('delimiter', $import_log_cols, true)) {
         $wpdb->query("ALTER TABLE `" . table_import_log() . "` ADD COLUMN `delimiter` VARCHAR(5) NOT NULL DEFAULT ',' AFTER `file_path`");
     }
+    if (!in_array('variant_bases', $import_log_cols, true)) {
+        $wpdb->query("ALTER TABLE `" . table_import_log() . "` ADD COLUMN `variant_bases` LONGTEXT NULL");
+    }
     if (!in_array('start_offset', $import_log_cols, true)) {
         $wpdb->query("ALTER TABLE `" . table_import_log() . "` ADD COLUMN `start_offset` INT UNSIGNED NOT NULL DEFAULT 0 AFTER `error_rows`");
     }
@@ -243,7 +249,14 @@ function maybe_migrate_db(): void
         $wpdb->query("ALTER TABLE `" . table_mappings() . "` ADD COLUMN `image_url_prefix` VARCHAR(255) NOT NULL DEFAULT ''{$position}");
     }
 
-    update_option('balmo_db_version', '1.3');
+    if (!in_array('group_variants', $mappings_cols, true)) {
+        $wpdb->query("ALTER TABLE `" . table_mappings() . "` ADD COLUMN `group_variants` TINYINT(1) NOT NULL DEFAULT 0");
+    }
+    if (!in_array('variant_suffixes', $mappings_cols, true)) {
+        $wpdb->query("ALTER TABLE `" . table_mappings() . "` ADD COLUMN `variant_suffixes` TEXT NULL");
+    }
+
+    update_option('balmo_db_version', '1.4');
 }
 
 function get_background_batch_size(): int

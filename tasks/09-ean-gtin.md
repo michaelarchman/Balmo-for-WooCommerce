@@ -1,10 +1,10 @@
 ---
 id: "09"
-status: blocked
+status: done
 commit: "feat: [09] save ean as woocommerce gtin"
 after: []
-closed: ""
-note: "Decyzje D1–D3 do potwierdzenia."
+closed: "2026-11-07"
+note: "D1–D3 przyjęte jak w propozycji (Wykonaj)."
 ---
 
 # 09 — EAN do natywnego pola GTIN WooCommerce

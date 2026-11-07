@@ -321,6 +321,8 @@ jQuery(function ($) {
         var matchBy         = $('#balmo-mapping-match-by').val();
         var formula         = $('#balmo-price-formula').val().trim();
         var imageUrlPrefix  = $('#balmo-image-url-prefix').val().trim();
+        var groupVariants   = $('#balmo-group-variants').is(':checked') ? 1 : 0;
+        var variantSuffixes = $('#balmo-variant-suffixes').val();
 
         if (!name) { alert('Podaj nazwę profilu.'); return; }
 
@@ -359,7 +361,9 @@ jQuery(function ($) {
             image_url_prefix: imageUrlPrefix,
             column_map:       columnMap,
             overrides:        overrides,
-            update_fields:    updateFields
+            update_fields:    updateFields,
+            group_variants:   groupVariants,
+            variant_suffixes: variantSuffixes
         }, function (res) {
             if (res.success) {
                 if (typeof res.data.id !== 'undefined') {
