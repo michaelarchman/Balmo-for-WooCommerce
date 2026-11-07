@@ -12,7 +12,7 @@
 | 03 | `03-atrybuty.md` | 1 | done 2026-11-07 | — | — |
 | 04 | `04-warianty.md` | 2 | done 2026-11-07 | średni | — |
 | 05 | `05-related.md` | 2 | done 2026-11-07 | średni | — |
-| 06 | `06-waluta.md` | 2 | blocked | średni | D1–D3 |
+| 06 | `06-waluta.md` | 2 | done 2026-11-07 | średni | — |
 | 07 | `07-galeria.md` | 2 | done 2026-11-07 | — | — |
 | 08 | `08-kategorie-rodzic.md` | 3 | done 2026-11-07 | lekki | — |
 | 09 | `09-ean-gtin.md` | 3 | done 2026-11-07 | — | — |

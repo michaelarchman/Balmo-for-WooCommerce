@@ -16,6 +16,7 @@ class ProductImporter
     private ?object $mapping;
     private ColumnMapper $mapper;
     private string  $import_mode;
+    private string  $expected_currency;
     private int     $current_row  = 0;
     private array   $current_data = [];
 
@@ -39,6 +40,7 @@ class ProductImporter
         $this->mapping      = $mapping;
         $this->mapper       = new ColumnMapper($mapping);
         $this->import_mode  = $log->import_mode ?? 'full';
+        $this->expected_currency = self::expectedCurrency($mapping);
 
         if ($mapping && !empty($mapping->group_variants) && $this->import_mode !== 'update') {
             $suffixes = json_decode((string) ($mapping->variant_suffixes ?? ''), true);
@@ -139,11 +141,29 @@ class ProductImporter
         return $stats;
     }
 
+    // Currency the feed must be in: profile setting, empty means the shop currency
+    public static function expectedCurrency(?object $mapping): string
+    {
+        $currency = $mapping ? strtoupper(trim((string) ($mapping->source_currency ?? ''))) : '';
+        return $currency !== '' ? $currency : strtoupper(get_woocommerce_currency());
+    }
+
     // Process one row, return 'created'|'updated'|'skipped'
     private function processRow(array $data, int $row_num): string
     {
         $this->current_row  = $row_num;
         $this->current_data = $data;
+
+        // Rows without a currency column are not checked (own CSV files)
+        $row_currency = strtoupper(trim((string) ($data['currency'] ?? '')));
+        if ($row_currency !== '' && $row_currency !== $this->expected_currency) {
+            $this->logError($row_num, $data, sprintf(
+                __('Waluta wiersza %1$s różna od oczekiwanej %2$s.', 'balmo'),
+                $row_currency,
+                $this->expected_currency
+            ));
+            return 'skipped';
+        }
 
         $map_result = $this->mapper->mapRowWithReason($data, $this->import_mode);
 

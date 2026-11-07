@@ -238,6 +238,7 @@ class MappingPage
         $match_by         = $m->match_by         ?? 'sku';
         $price_formula    = $m->price_formula    ?? '';
         $image_url_prefix = $m->image_url_prefix ?? '';
+        $source_currency  = $m->source_currency  ?? '';
         $group_variants   = !empty($m->group_variants);
         $variant_suffixes = self::variantSuffixesToText($m->variant_suffixes ?? '');
         $column_map       = $m ? (json_decode($m->column_map,    true) ?: []) : [];
@@ -291,6 +292,20 @@ class MappingPage
                             <option value="id"  <?php selected($match_by, 'id');  ?>><?php esc_html_e('Po ID zewnętrznym (product_id)', 'balmo'); ?></option>
                         </select>
                         <p class="description"><?php esc_html_e('Jak identyfikować istniejące produkty WooCommerce.', 'balmo'); ?></p>
+                    </td>
+                </tr>
+                <tr>
+                    <th><label for="balmo-source-currency"><?php esc_html_e('Waluta feedu', 'balmo'); ?></label></th>
+                    <td>
+                        <select id="balmo-source-currency">
+                            <option value="" <?php selected($source_currency, ''); ?>>
+                                <?php echo esc_html(sprintf(__('Waluta sklepu (%s)', 'balmo'), get_woocommerce_currency())); ?>
+                            </option>
+                            <?php foreach (['PLN', 'EUR', 'GBP', 'USD'] as $code): ?>
+                                <option value="<?php echo esc_attr($code); ?>" <?php selected($source_currency, $code); ?>><?php echo esc_html($code); ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                        <p class="description"><?php esc_html_e('Jeśli różna od waluty sklepu, przelicz cenę formułą (np. {price} * 4.30). Wiersze w innej walucie są pomijane.', 'balmo'); ?></p>
                     </td>
                 </tr>
             </table>
@@ -439,6 +454,10 @@ class MappingPage
         $column_map       = $_POST['column_map']   ?? [];
         $overrides        = $_POST['overrides']    ?? [];
         $update_fields    = $_POST['update_fields'] ?? [];
+        $source_currency  = strtoupper(sanitize_text_field($_POST['source_currency'] ?? ''));
+        if (!array_key_exists($source_currency, get_woocommerce_currencies())) {
+            $source_currency = '';
+        }
         $group_variants   = !empty($_POST['group_variants']) ? 1 : 0;
         $variant_suffixes = self::parseVariantSuffixes((string) wp_unslash($_POST['variant_suffixes'] ?? ''));
 
@@ -462,6 +481,7 @@ class MappingPage
             'column_map'       => wp_json_encode($column_map),
             'overrides'        => wp_json_encode($overrides),
             'update_fields'    => wp_json_encode($update_fields),
+            'source_currency'  => $source_currency,
             'group_variants'   => $group_variants,
             'variant_suffixes' => wp_json_encode($variant_suffixes, JSON_UNESCAPED_UNICODE),
         ];
@@ -576,6 +596,7 @@ class MappingPage
             'column_map'       => json_decode($m->column_map, true) ?: [],
             'overrides'        => json_decode($m->overrides,  true) ?: [],
             'update_fields'    => json_decode($m->update_fields, true) ?: [],
+            'source_currency'  => $m->source_currency ?? '',
             'group_variants'   => !empty($m->group_variants),
             'variant_suffixes' => self::variantSuffixesToText($m->variant_suffixes ?? ''),
         ]);

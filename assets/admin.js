@@ -321,6 +321,7 @@ jQuery(function ($) {
         var matchBy         = $('#balmo-mapping-match-by').val();
         var formula         = $('#balmo-price-formula').val().trim();
         var imageUrlPrefix  = $('#balmo-image-url-prefix').val().trim();
+        var sourceCurrency  = $('#balmo-source-currency').val();
         var groupVariants   = $('#balmo-group-variants').is(':checked') ? 1 : 0;
         var variantSuffixes = $('#balmo-variant-suffixes').val();
 
@@ -362,6 +363,7 @@ jQuery(function ($) {
             column_map:       columnMap,
             overrides:        overrides,
             update_fields:    updateFields,
+            source_currency:  sourceCurrency,
             group_variants:   groupVariants,
             variant_suffixes: variantSuffixes
         }, function (res) {

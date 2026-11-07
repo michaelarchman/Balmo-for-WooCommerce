@@ -73,7 +73,7 @@
 |---|---|
 | `{prefix}balmo_import_log` | import: status, liczniki, offsety, plik, separator, `variant_bases` (kody bazowe par wariantów) |
 | `{prefix}balmo_import_errors` | błąd wiersza: numer, dane (max 10 pól), komunikat |
-| `{prefix}balmo_mappings` | profil: `format`, `source_type`, `image_url_prefix`, `column_map`, `overrides`, `price_formula`, `match_by`, `update_fields`, `group_variants`, `variant_suffixes` |
+| `{prefix}balmo_mappings` | profil: `format`, `source_type`, `image_url_prefix`, `column_map`, `overrides`, `price_formula`, `match_by`, `update_fields`, `group_variants`, `variant_suffixes`, `source_currency` |
 
 - Zmiana schematu: `dbDelta` w `balmo.php`, domyślne wartości = obecne zachowanie.
 

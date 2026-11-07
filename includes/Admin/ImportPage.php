@@ -188,6 +188,21 @@ class ImportPage
         // Validation (the file is always CSV at this point)
         $validation = CsvValidator::validate($result['file_path'], $result['delimiter'], $source_type);
 
+        // Warn before the start when the first rows are in another currency than expected
+        $mapping  = $mapping_id ? self::mappingCurrencyRow($mapping_id) : null;
+        $expected = \Balmo\Service\ProductImporter::expectedCurrency($mapping);
+        foreach ($result['preview'] as $preview_row) {
+            $row_currency = strtoupper(trim((string) ($preview_row['currency'] ?? '')));
+            if ($row_currency !== '' && $row_currency !== $expected) {
+                $validation['warnings'][] = sprintf(
+                    __('Waluta feedu (%1$s) różni się od oczekiwanej (%2$s). Wiersze zostaną pominięte — ustaw "Waluta feedu" w profilu i przelicz cenę formułą.', 'balmo'),
+                    $row_currency,
+                    $expected
+                );
+                break;
+            }
+        }
+
         wp_send_json_success([
             'file_path'   => $result['file_path'],
             'delimiter'   => $result['delimiter'],
@@ -200,6 +215,14 @@ class ImportPage
         ]);
     }
 
+
+    private static function mappingCurrencyRow(int $mapping_id): ?object
+    {
+        global $wpdb;
+        return $wpdb->get_row($wpdb->prepare(
+            "SELECT source_currency FROM " . \Balmo\table_mappings() . " WHERE id = %d", $mapping_id
+        ));
+    }
 
     // --- AJAX: Rozpocznij import ---
     // Writes the record to DB and hands processing to WP-Cron. The browser only monitors.

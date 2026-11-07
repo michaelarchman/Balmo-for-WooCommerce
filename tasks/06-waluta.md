@@ -1,11 +1,11 @@
 ---
 id: "06"
-status: blocked
+status: done
 commit: "feat: [06] check feed currency against profile"
 model: średni
 after: []
-closed: ""
-note: "Decyzje D1–D3 do potwierdzenia."
+closed: "2026-11-07"
+note: "Wykonane z propozycjami D1–D3 — użytkownik: Wykonaj."
 ---
 
 # 06 — Kontrola waluty feedu
