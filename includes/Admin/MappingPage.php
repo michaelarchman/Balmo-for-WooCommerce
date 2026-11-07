@@ -25,6 +25,7 @@ class MappingPage
         '_categories'       => 'Kategoria produktu',
         '_tags'             => 'Tagi produktu',
         '_attributes'       => 'Atrybuty produktu',
+        '_related_ext'      => 'Produkty powiązane (ID hurtowni)',
         // Images
         '_thumbnail'        => 'Główne zdjęcie (URL)',
         // Tax
@@ -83,6 +84,7 @@ class MappingPage
         'stock'              => '_stock',
         'main_image'         => '_thumbnail',
         'attributes'         => '_attributes',
+        'related'            => '_related_ext',
     ];
 
     // WC_FIELDS + extra images 2 … BALMO_MAX_GALLERY_IMAGES + 1, right after the main image

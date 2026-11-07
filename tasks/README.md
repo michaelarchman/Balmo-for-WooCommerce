@@ -11,10 +11,10 @@
 | 02 | `02-import-xml.md` | 1 | done 2026-11-07 | — | — |
 | 03 | `03-atrybuty.md` | 1 | done 2026-11-07 | — | — |
 | 04 | `04-warianty.md` | 2 | done 2026-11-07 | średni | — |
-| 05 | `05-related.md` | 2 | blocked | średni | D1 |
+| 05 | `05-related.md` | 2 | done 2026-11-07 | średni | — |
 | 06 | `06-waluta.md` | 2 | blocked | średni | D1–D3 |
 | 07 | `07-galeria.md` | 2 | done 2026-11-07 | — | — |
-| 08 | `08-kategorie-rodzic.md` | 3 | done 2026-11-07 | — |
+| 08 | `08-kategorie-rodzic.md` | 3 | done 2026-11-07 | lekki | — |
 | 09 | `09-ean-gtin.md` | 3 | done 2026-11-07 | — | — |
 | 10 | `10-wersja-php.md` | 1 | done 2026-11-07 | — | — |
 | 11 | `11-komentarze-po-angielsku.md` | 1 | done 2026-11-07 | — | — |

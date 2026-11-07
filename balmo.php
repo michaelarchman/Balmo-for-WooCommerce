@@ -318,6 +318,8 @@ function clear_offset_attempts(int $import_id, int $offset): void
  * Each action handles BALMO_BATCH_SIZE rows, then queues the next one.
  * Registered outside is_admin(): AS runs outside the admin context.
  */
+add_action(\Balmo\Service\RelatedResolver::ACTION, [\Balmo\Service\RelatedResolver::class, 'run'], 10, 2);
+
 add_action('balmo_as_batch', function (int $import_id, int $offset): void {
     global $wpdb;
 
@@ -373,6 +375,7 @@ add_action('balmo_as_batch', function (int $import_id, int $offset): void {
 
         if ($is_done) {
             clear_import_heartbeat($import_id);
+            \Balmo\Service\RelatedResolver::schedule($import_id);
             return;
         }
 
@@ -485,6 +488,7 @@ add_action('balmo_as_batch', function (int $import_id, int $offset): void {
         wp_suspend_cache_addition(false);
         @unlink($file_path);
         clear_import_heartbeat($import_id);
+        \Balmo\Service\RelatedResolver::schedule($import_id);
         return;
     }
 

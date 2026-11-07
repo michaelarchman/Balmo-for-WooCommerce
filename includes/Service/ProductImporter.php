@@ -366,6 +366,13 @@ class ProductImporter
             wp_set_object_terms($post_id, array_map('trim', explode(',', $mapped['_tags'])), 'product_tag');
         }
 
+        // Related products: raw wholesaler IDs, resolved to upsells after the import (RelatedResolver)
+        if (isset($mapped['_related_ext'])) {
+            $ids = array_filter(array_map('intval', explode(',', $mapped['_related_ext'])));
+            update_post_meta($post_id, '_balmo_related_ext', implode(',', array_unique($ids)));
+            update_post_meta($post_id, '_balmo_related_import', (string) $this->import_id);
+        }
+
         // Images
         $this->saveImages($post_id, $mapped);
 

@@ -1,11 +1,11 @@
 ---
 id: "05"
-status: blocked
+status: done
 commit: "feat: [05] map related products to upsells"
 model: średni
 after: []
-closed: ""
-note: "Decyzja D1 (upsell czy cross-sell) do potwierdzenia."
+closed: "2026-11-07"
+note: "Wykonane z propozycją D1 (upsell) — użytkownik: Wykonaj."
 ---
 
 # 05 — Produkty powiązane (`related`) jako upsell

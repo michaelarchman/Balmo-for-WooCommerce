@@ -383,6 +383,7 @@ class ImportPage
 
         if ($is_done) {
             @unlink($file_path);
+            \Balmo\Service\RelatedResolver::schedule($import_id);
         }
 
         wp_send_json_success([

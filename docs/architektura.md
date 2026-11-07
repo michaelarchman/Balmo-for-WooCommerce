@@ -52,6 +52,7 @@
 | `Service\ColumnMapper` | wiersz → pola WC, nadpisania, formuła ceny, prefiks URL zdjęć |
 | `Service\PriceFormula` | formuły bez `eval()`, zmienne `{price}`, `{vat}` |
 | `Service\ProductImporter` | transza: create/update produktu, kategorie, atrybuty globalne (`pa_*`, meta `_balmo_attribute_taxonomies`), grupowanie wariantów (produkt variable + `WC_Product_Variation`, opcja profilu `group_variants`), zdjęcia zewnętrzne, błędy |
+| `Service\RelatedResolver` | po imporcie pełnym: meta `_balmo_related_ext` (ID hurtowni) → `_upsell_ids`; akcja AS `balmo_resolve_related`, porcje po 200 |
 | `Cron\ImportScheduler` | harmonogramy w opcji `balmo_schedules`, `execute()` |
 
 ## Przepływ importu

@@ -282,6 +282,7 @@ class ImportScheduler
                 ['%s', '%s'],
                 ['%d']
             );
+            \Balmo\Service\RelatedResolver::schedule($import_id);
         }
 
         @unlink($fetcher_result['file_path']);
