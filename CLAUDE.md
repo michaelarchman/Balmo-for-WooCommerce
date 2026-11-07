@@ -63,6 +63,12 @@ assets/             — admin.js (AJAX wizard + polling), admin.css
 - `{prefix}balmo_import_errors` — per-row errors with row data and message
 - `{prefix}balmo_mappings` — mapping profiles with `column_map`, `overrides`, `price_formula` as JSON
 
+## Agent Skills
+
+Shared skills live in `.claude/skills/` (see its `README.md`). `caveman` is mandatory: invoke it at the start of every session and keep its response style until the user says "stop caveman" or "normal mode". Code, comments, commits, and docs stay in normal prose.
+
+For code work use `investigate-first` (read before editing), `surgical-patch` (smallest fix at the right layer), `safe-refactor`, `lean-build`, `migration`, and `verify-and-stop` (verify, then stop). Use `caveman-commit` for commit messages and `caveman-review` for reviews.
+
 ## Coding Conventions
 
 Follow AGENTS.md exactly:
