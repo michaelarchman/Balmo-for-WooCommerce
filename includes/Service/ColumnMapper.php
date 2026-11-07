@@ -17,8 +17,6 @@ class ColumnMapper
     private array  $update_fields;   // pola do aktualizacji (tryb update)
     private string $image_url_prefix; // prefix URL dla zdjęć (np. https://drop.seltu.pl/)
 
-    private const IMAGE_FIELDS = ['_thumbnail', '_gallery_image_2', '_gallery_image_3', '_gallery_image_4', '_gallery_image_5', '_gallery_image_6', '_gallery_image_7'];
-
     public function __construct(?object $mapping)
     {
         if ($mapping) {
@@ -116,6 +114,9 @@ class ColumnMapper
             // VAT: liczba z opcjonalnym % na końcu
             'tax_class'     => is_numeric(rtrim($v, '%')),
 
+            // JSON list of {name, value} pairs from FeedRowFlattener
+            '_attributes'   => is_array(json_decode($v, true)),
+
             // Pozostałe pola — każda wartość jest akceptowalna
             default         => true,
         };
@@ -142,15 +143,7 @@ class ColumnMapper
             '_weight' => str_replace(',', '.', $value),
 
             // Zdjęcia — dodaj prefix jeśli URL jest relatywny
-            '_thumbnail',
-            '_gallery_image_2',
-            '_gallery_image_3',
-            '_gallery_image_4',
-            '_gallery_image_5',
-            '_gallery_image_6',
-            '_gallery_image_7' => $this->applyImagePrefix($value),
-
-            default => $value,
+            default => $this->isImageField($wc_field) ? $this->applyImagePrefix($value) : $value,
         };
     }
 
@@ -180,6 +173,11 @@ class ColumnMapper
             return 'draft';
         }
         return get_option('balmo_default_status', 'publish');
+    }
+
+    private function isImageField(string $wc_field): bool
+    {
+        return $wc_field === '_thumbnail' || preg_match('/^_gallery_image_\d+$/', $wc_field) === 1;
     }
 
     private function applyImagePrefix(string $value): string

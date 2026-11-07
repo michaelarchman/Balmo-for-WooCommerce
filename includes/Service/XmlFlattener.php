@@ -110,6 +110,7 @@ class XmlFlattener
         if ($error !== null) {
             return $error;
         }
+        $headers = FeedRowFlattener::completeImageHeaders($headers);
 
         $handle = fopen($csv_path, 'w');
         if (!$handle) {
@@ -120,10 +121,17 @@ class XmlFlattener
         fputcsv($handle, $headers);
 
         // Przebieg 2: zapis wierszy
-        $preview    = [];
-        $total_rows = 0;
-        $error      = self::eachProduct($xml_path, function (array $product) use ($handle, $headers, &$preview, &$total_rows) {
-            $flat = FeedRowFlattener::flatten($product);
+        $preview        = [];
+        $total_rows     = 0;
+        $overflow_count = 0;
+        $overflow_first = null;
+        $error          = self::eachProduct($xml_path, function (array $product) use ($handle, $headers, &$preview, &$total_rows, &$overflow_count, &$overflow_first) {
+            $dropped = 0;
+            $flat    = FeedRowFlattener::flatten($product, $dropped);
+            if ($dropped > 0) {
+                $overflow_count++;
+                $overflow_first ??= (string) ($product['product_code'] ?? $product['product_id'] ?? '');
+            }
             $row  = [];
             foreach ($headers as $h) {
                 $row[] = $flat[$h] ?? '';
@@ -147,6 +155,7 @@ class XmlFlattener
             @unlink($csv_path);
             return $error;
         }
+        FeedRowFlattener::recordOverflow($csv_path, $overflow_count, (string) $overflow_first);
 
         return [
             'file_path'   => $csv_path,

@@ -6,7 +6,7 @@ if (!defined('ABSPATH')) exit;
 
 class MappingPage
 {
-    // Pola WooCommerce dostępne do mapowania
+    // Pola WooCommerce dostępne do mapowania (bez zdjęć dodatkowych — te dodaje wcFields())
     public const WC_FIELDS = [
         // Podstawowe
         'post_title'        => 'Nazwa produktu',
@@ -24,14 +24,9 @@ class MappingPage
         // Taksonomie
         '_categories'       => 'Kategoria produktu',
         '_tags'             => 'Tagi produktu',
+        '_attributes'       => 'Atrybuty produktu',
         // Zdjęcia
         '_thumbnail'        => 'Główne zdjęcie (URL)',
-        '_gallery_image_2'  => 'Zdjęcie dodatkowe 2',
-        '_gallery_image_3'  => 'Zdjęcie dodatkowe 3',
-        '_gallery_image_4'  => 'Zdjęcie dodatkowe 4',
-        '_gallery_image_5'  => 'Zdjęcie dodatkowe 5',
-        '_gallery_image_6'  => 'Zdjęcie dodatkowe 6',
-        '_gallery_image_7'  => 'Zdjęcie dodatkowe 7',
         // Podatek
         'tax_class'         => 'Klasa podatkowa',
         // Produkt
@@ -87,13 +82,32 @@ class MappingPage
         'description'        => 'post_content',
         'stock'              => '_stock',
         'main_image'         => '_thumbnail',
-        'additional_image_1' => '_gallery_image_2',
-        'additional_image_2' => '_gallery_image_3',
-        'additional_image_3' => '_gallery_image_4',
-        'additional_image_4' => '_gallery_image_5',
-        'additional_image_5' => '_gallery_image_6',
-        'additional_image_6' => '_gallery_image_7',
+        'attributes'         => '_attributes',
     ];
+
+    // WC_FIELDS + zdjęcia dodatkowe 2 … BALMO_MAX_GALLERY_IMAGES + 1, zaraz po zdjęciu głównym
+    public static function wcFields(): array
+    {
+        $fields = [];
+        foreach (self::WC_FIELDS as $field => $label) {
+            $fields[$field] = $label;
+            if ($field !== '_thumbnail') continue;
+            for ($n = 2; $n <= BALMO_MAX_GALLERY_IMAGES + 1; $n++) {
+                $fields['_gallery_image_' . $n] = 'Zdjęcie dodatkowe ' . $n;
+            }
+        }
+        return $fields;
+    }
+
+    // AUTO_MAP_JSON + additional_image_1 … additional_image_{BALMO_MAX_GALLERY_IMAGES}
+    public static function autoMapJson(): array
+    {
+        $map = self::AUTO_MAP_JSON;
+        for ($n = 1; $n <= BALMO_MAX_GALLERY_IMAGES; $n++) {
+            $map['additional_image_' . $n] = '_gallery_image_' . ($n + 1);
+        }
+        return $map;
+    }
 
     public static function init(): void
     {
@@ -329,6 +343,7 @@ class MappingPage
                 'post_title'     => __('Nazwa produktu', 'balmo'),
                 'post_content'   => __('Opis', 'balmo'),
                 '_weight'        => __('Waga', 'balmo'),
+                '_attributes'    => __('Atrybuty produktu', 'balmo'),
             ];
             foreach ($all_update_fields as $val => $label):
                 $checked = in_array($val, $update_fields, true) ? 'checked' : '';
@@ -363,7 +378,7 @@ class MappingPage
                 <td><input type="text" class="balmo-csv-col regular-text" value="{{csv_col}}"></td>
                 <td>
                     <select class="balmo-wc-field">
-                        <?php foreach (self::WC_FIELDS as $val => $label): ?>
+                        <?php foreach (self::wcFields() as $val => $label): ?>
                             <option value="<?php echo esc_attr($val); ?>"><?php echo esc_html($label); ?></option>
                         <?php endforeach; ?>
                     </select>
@@ -376,8 +391,8 @@ class MappingPage
         <script>
         // Dane dla JS: auto-mapy i WC fields
         window.balmoAutoMap     = <?php echo wp_json_encode(self::AUTO_MAP); ?>;
-        window.balmoAutoMapJson = <?php echo wp_json_encode(self::AUTO_MAP_JSON); ?>;
-        window.balmoWcFields    = <?php echo wp_json_encode(array_keys(self::WC_FIELDS)); ?>;
+        window.balmoAutoMapJson = <?php echo wp_json_encode(self::autoMapJson()); ?>;
+        window.balmoWcFields    = <?php echo wp_json_encode(array_keys(self::wcFields())); ?>;
         </script>
         <?php
     }

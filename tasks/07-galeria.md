@@ -1,9 +1,9 @@
 ---
 id: "07"
-status: todo
+status: done
 commit: "feat: [07] support more than six gallery images"
 after: ["02"]
-closed: ""
+closed: "2026-11-07"
 note: ""
 ---
 

@@ -78,6 +78,7 @@ define('BALMO_BATCH_SIZE', 200);
 define('BALMO_ASYNC_BATCH_SIZE', 10);
 define('BALMO_BATCH_TIME_LIMIT', 20);
 define('BALMO_HEARTBEAT_TTL', 180);
+define('BALMO_MAX_GALLERY_IMAGES', 12); // additional images per product; fields _gallery_image_2 … _gallery_image_{N+1}
 
 spl_autoload_register(function (string $class): void {
     if (strpos($class, 'Balmo\\') !== 0) return;

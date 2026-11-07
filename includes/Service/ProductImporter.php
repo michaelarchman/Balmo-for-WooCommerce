@@ -16,6 +16,13 @@ class ProductImporter
     private ?object $mapping;
     private ColumnMapper $mapper;
     private string  $import_mode;
+    private int     $current_row  = 0;
+    private array   $current_data = [];
+
+    // Per-instance caches, so a batch does not repeat lookups for the same attribute or term
+    private ?array  $attribute_index = null; // lowercase label => attribute slug (without pa_)
+    private array   $term_cache      = [];   // taxonomy|lowercase value => term_id
+    private ?array  $skip_values     = null; // lowercase values dropped at import
 
     public function __construct(int $import_id, object $log, ?object $mapping)
     {
@@ -46,6 +53,11 @@ class ProductImporter
             $this->logError(0, [], __('Nie można otworzyć pliku CSV.', 'balmo'));
             $stats['errors']++;
             return $stats;
+        }
+
+        $warning = FeedRowFlattener::takeWarning($file_path);
+        if ($warning !== null) {
+            $this->logError(0, [], $warning);
         }
 
         // Pomiń BOM
@@ -113,6 +125,9 @@ class ProductImporter
     // Przetwórz pojedynczy wiersz, zwróć 'created'|'updated'|'skipped'
     private function processRow(array $data, int $row_num): string
     {
+        $this->current_row  = $row_num;
+        $this->current_data = $data;
+
         $map_result = $this->mapper->mapRowWithReason($data, $this->import_mode);
 
         // Wiersz ma kolumny z nieprawidłową wartością bez override → pomijamy
@@ -315,6 +330,207 @@ class ProductImporter
                 $product->save();
             }
         }
+
+        // Atrybuty — po zapisie ceny, żeby pracować na świeżym obiekcie produktu
+        if (isset($mapped['_attributes'])) {
+            $this->assignAttributes($post_id, $mapped['_attributes']);
+        }
+    }
+
+    /**
+     * Set global (pa_*) attributes from a JSON list of {name, value} pairs.
+     * Only attributes previously set by Balmo (meta _balmo_attribute_taxonomies) can be removed;
+     * attributes added by hand stay. A failing attribute is logged and the rest is still saved.
+     */
+    private function assignAttributes(int $post_id, string $json): void
+    {
+        $items = json_decode($json, true);
+        if (!is_array($items)) return;
+
+        // taxonomy => term ids, in feed order
+        $feed = [];
+        foreach ($items as $item) {
+            if (!is_array($item)) continue;
+
+            $name  = trim((string) ($item['name'] ?? ''));
+            $value = trim((string) ($item['value'] ?? ''));
+            if ($name === '' || $value === '' || $this->isSkippedAttributeValue($value)) continue;
+
+            $taxonomy = $this->resolveAttributeTaxonomy($name);
+            if ($taxonomy === '') continue;
+
+            $term_id = $this->resolveAttributeTerm($taxonomy, $value);
+            if ($term_id === 0) continue;
+
+            if (!isset($feed[$taxonomy])) {
+                $feed[$taxonomy] = [];
+            }
+            if (!in_array($term_id, $feed[$taxonomy], true)) {
+                $feed[$taxonomy][] = $term_id;
+            }
+        }
+
+        $previous = get_post_meta($post_id, '_balmo_attribute_taxonomies', true);
+        $previous = is_array($previous) ? $previous : [];
+
+        if (empty($feed) && empty($previous)) return;
+
+        $product = wc_get_product($post_id);
+        if (!$product) return;
+
+        $attributes = $product->get_attributes();
+
+        foreach ($previous as $taxonomy) {
+            if (isset($feed[$taxonomy])) continue;
+            unset($attributes[$taxonomy]);
+            wp_set_object_terms($post_id, [], $taxonomy);
+        }
+
+        $managed = [];
+        foreach ($feed as $taxonomy => $term_ids) {
+            $set = wp_set_object_terms($post_id, $term_ids, $taxonomy);
+            if (is_wp_error($set)) {
+                $this->logError($this->current_row, $this->current_data, sprintf(
+                    __('Nie można przypisać atrybutu %1$s: %2$s', 'balmo'),
+                    $taxonomy,
+                    $set->get_error_message()
+                ));
+                continue;
+            }
+
+            $attribute = new \WC_Product_Attribute();
+            $attribute->set_id((int) wc_attribute_taxonomy_id_by_name($taxonomy));
+            $attribute->set_name($taxonomy);
+            $attribute->set_options($term_ids);
+            $attribute->set_position(isset($attributes[$taxonomy]) ? $attributes[$taxonomy]->get_position() : count($attributes));
+            $attribute->set_visible(true);
+            $attribute->set_variation(false);
+
+            $attributes[$taxonomy] = $attribute;
+            $managed[]             = $taxonomy;
+        }
+
+        $product->set_attributes($attributes);
+        $product->save();
+
+        if (empty($managed)) {
+            delete_post_meta($post_id, '_balmo_attribute_taxonomies');
+        } else {
+            update_post_meta($post_id, '_balmo_attribute_taxonomies', $managed);
+        }
+    }
+
+    private function isSkippedAttributeValue(string $value): bool
+    {
+        if ($this->skip_values === null) {
+            $raw = (string) get_option('balmo_attribute_skip_values', \Balmo\Admin\Settings::DEFAULT_ATTRIBUTE_SKIP_VALUES);
+            $this->skip_values = [];
+            foreach (preg_split('/\R/', $raw) as $line) {
+                $line = mb_strtolower(trim($line));
+                if ($line !== '') {
+                    $this->skip_values[$line] = true;
+                }
+            }
+        }
+
+        return isset($this->skip_values[mb_strtolower($value)]);
+    }
+
+    // Find or create the global attribute for a feed name; returns taxonomy (pa_*) or '' on failure
+    private function resolveAttributeTaxonomy(string $name): string
+    {
+        if ($this->attribute_index === null) {
+            $this->attribute_index = [];
+            foreach (wc_get_attribute_taxonomies() as $tax) {
+                $this->attribute_index[mb_strtolower($tax->attribute_label)] = $tax->attribute_name;
+            }
+        }
+
+        $key = mb_strtolower($name);
+
+        if (!isset($this->attribute_index[$key])) {
+            $slug = $this->uniqueAttributeSlug($name);
+            $id   = wc_create_attribute([
+                'name'         => $name,
+                'slug'         => $slug,
+                'type'         => 'select',
+                'order_by'     => 'menu_order',
+                'has_archives' => false,
+            ]);
+
+            if (is_wp_error($id)) {
+                $this->logError($this->current_row, $this->current_data, sprintf(
+                    __('Nie można utworzyć atrybutu %1$s: %2$s', 'balmo'),
+                    $name,
+                    $id->get_error_message()
+                ));
+                return '';
+            }
+
+            $this->attribute_index[$key] = $slug;
+        }
+
+        $taxonomy = wc_attribute_taxonomy_name($this->attribute_index[$key]);
+
+        // A taxonomy created in this request is not registered yet
+        if (!taxonomy_exists($taxonomy)) {
+            register_taxonomy($taxonomy, ['product'], [
+                'hierarchical' => false,
+                'show_ui'      => false,
+                'query_var'    => true,
+                'rewrite'      => false,
+            ]);
+        }
+
+        return $taxonomy;
+    }
+
+    // Slug limited to 28 characters (WooCommerce limit); a collision after truncation gets a numeric suffix
+    private function uniqueAttributeSlug(string $name): string
+    {
+        $base = rtrim(substr(sanitize_title($name), 0, 28), '-');
+        if ($base === '') {
+            $base = 'atrybut';
+        }
+
+        $slug = $base;
+        for ($i = 2; in_array($slug, $this->attribute_index, true); $i++) {
+            $suffix = '-' . $i;
+            $slug   = rtrim(substr($base, 0, 28 - strlen($suffix)), '-') . $suffix;
+        }
+
+        return $slug;
+    }
+
+    // Find or create the term for a value; the value is never split on commas
+    private function resolveAttributeTerm(string $taxonomy, string $value): int
+    {
+        $key = $taxonomy . '|' . mb_strtolower($value);
+        if (isset($this->term_cache[$key])) {
+            return $this->term_cache[$key];
+        }
+
+        $term = get_term_by('name', $value, $taxonomy);
+        if ($term) {
+            return $this->term_cache[$key] = (int) $term->term_id;
+        }
+
+        $result = wp_insert_term($value, $taxonomy);
+        if (is_wp_error($result)) {
+            $existing = (int) $result->get_error_data('term_exists');
+            if ($existing > 0) {
+                return $this->term_cache[$key] = $existing;
+            }
+
+            $this->logError($this->current_row, $this->current_data, sprintf(
+                __('Nie można utworzyć wartości atrybutu "%1$s": %2$s', 'balmo'),
+                $value,
+                $result->get_error_message()
+            ));
+            return 0;
+        }
+
+        return $this->term_cache[$key] = (int) $result['term_id'];
     }
 
     // Utwórz/znajdź kategorie z hierarchii "Kobiety > Bransoletki na nogę"
@@ -371,9 +587,15 @@ class ProductImporter
 
         $has_gallery_columns = false;
         $gallery_ids = [];
-        for ($i = 2; $i <= 7; $i++) {
-            $field = "_gallery_image_{$i}";
-            if (!array_key_exists($field, $mapped)) continue;
+        $gallery_fields = [];
+        foreach (array_keys($mapped) as $field) {
+            if (preg_match('/^_gallery_image_(\d+)$/', (string) $field, $m)) {
+                $gallery_fields[(int) $m[1]] = (string) $field;
+            }
+        }
+        ksort($gallery_fields);
+
+        foreach ($gallery_fields as $field) {
             $has_gallery_columns = true;
             $url = esc_url_raw((string) $mapped[$field]);
             if ($url === '') continue;

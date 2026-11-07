@@ -32,25 +32,26 @@
 | `BALMO_ASYNC_BATCH_SIZE` | 25 wierszy (tło, cron) |
 | `BALMO_BATCH_TIME_LIMIT` | 20 s / transza |
 | `BALMO_HEARTBEAT_TTL` | 180 s (wykrywanie zawieszenia) |
+| `BALMO_MAX_GALLERY_IMAGES` | 12 zdjęć dodatkowych (pola `_gallery_image_2` … `_gallery_image_13`, `additional_image_1` … `additional_image_12`) |
 
 ## Klasy
 
 | Klasa | Robi |
 |---|---|
 | `Admin\ImportPage` | kreator: URL / upload, podgląd, start, status |
-| `Admin\MappingPage` | profile mapowania; `WC_FIELDS`, `AUTO_MAP` (CSV), `AUTO_MAP_JSON` |
+| `Admin\MappingPage` | profile mapowania; `WC_FIELDS` + `wcFields()`, `AUTO_MAP` (CSV), `AUTO_MAP_JSON` + `autoMapJson()` |
 | `Admin\SchedulerPage` | lista i dodawanie harmonogramów, kolumna format |
 | `Admin\HistoryPage` | historia importów, błędy wierszy |
-| `Admin\Settings` | rozmiar transzy, tryb zdjęć, domyślny status, retencja logów |
+| `Admin\Settings` | rozmiar transzy, tryb zdjęć, domyślny status, retencja logów, pomijane wartości atrybutów (`balmo_attribute_skip_values`) |
 | `Service\FeedLoader` | wybór parsera wg `format` profilu (`csv`, `json`, `xml`); brak profilu → `csv` |
 | `Service\CsvFetcher` | CSV do `uploads/balmo/`, separator, podgląd |
 | `Service\JsonFlattener` | JSON → CSV (obiekt z kluczami `product_id`, tablica, `products`) |
 | `Service\XmlFlattener` | XML → CSV; `XMLReader`, po jednym `<Product>`; DOCTYPE odrzucany; pusty `<active>` → `0` |
-| `Service\FeedRowFlattener` | produkt (tablica) → płaski wiersz; wspólny dla JSON i XML |
+| `Service\FeedRowFlattener` | produkt (tablica) → płaski wiersz; wspólny dla JSON i XML; atrybuty → kolumna `attributes` (JSON `[{name,value}]`) |
 | `Service\CsvValidator` | nagłówki, typy |
 | `Service\ColumnMapper` | wiersz → pola WC, nadpisania, formuła ceny, prefiks URL zdjęć |
 | `Service\PriceFormula` | formuły bez `eval()`, zmienne `{price}`, `{vat}` |
-| `Service\ProductImporter` | transza: create/update produktu, kategorie, zdjęcia zewnętrzne, błędy |
+| `Service\ProductImporter` | transza: create/update produktu, kategorie, atrybuty globalne (`pa_*`, meta `_balmo_attribute_taxonomies`), zdjęcia zewnętrzne, błędy |
 | `Cron\ImportScheduler` | harmonogramy w opcji `balmo_schedules`, `execute()` |
 
 ## Przepływ importu

@@ -8,6 +8,9 @@ class Settings
 {
     private const MENU_SLUG = 'balmo';
 
+    // Attribute values dropped at import, one per line (case-insensitive)
+    public const DEFAULT_ATTRIBUTE_SKIP_VALUES = "Brak Informacji\nnie dotyczy";
+
     public static function init(): void
     {
         add_action('admin_menu',    [self::class, 'registerMenu']);
@@ -107,6 +110,12 @@ class Settings
             },
             'default' => 30,
         ]);
+
+        register_setting('balmo_settings', 'balmo_attribute_skip_values', [
+            'type'              => 'string',
+            'sanitize_callback' => 'sanitize_textarea_field',
+            'default'           => self::DEFAULT_ATTRIBUTE_SKIP_VALUES,
+        ]);
     }
 
     public static function enqueueAssets(string $hook): void
@@ -158,6 +167,7 @@ class Settings
         $image_mode     = get_option('balmo_image_mode', 'none');
         $default_status = get_option('balmo_default_status', 'publish');
         $log_retention  = (int) get_option('balmo_log_retention', 30);
+        $skip_values    = (string) get_option('balmo_attribute_skip_values', self::DEFAULT_ATTRIBUTE_SKIP_VALUES);
         ?>
         <div class="wrap">
             <h1><?php esc_html_e('Ustawienia Balmo', 'balmo'); ?></h1>
@@ -225,6 +235,18 @@ class Settings
                                    value="<?php echo esc_attr($log_retention); ?>" min="1" max="365">
                             <p class="description">
                                 <?php esc_html_e('Po ilu dniach automatycznie usuwać stare logi importu.', 'balmo'); ?>
+                            </p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row">
+                            <label for="balmo_attribute_skip_values"><?php esc_html_e('Pomijane wartości atrybutów', 'balmo'); ?></label>
+                        </th>
+                        <td>
+                            <textarea id="balmo_attribute_skip_values" name="balmo_attribute_skip_values"
+                                      rows="4" class="large-text"><?php echo esc_textarea($skip_values); ?></textarea>
+                            <p class="description">
+                                <?php esc_html_e('Jedna wartość na linię, bez rozróżniania wielkości liter. Atrybuty z taką wartością nie są importowane.', 'balmo'); ?>
                             </p>
                         </td>
                     </tr>

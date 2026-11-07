@@ -114,11 +114,18 @@ class JsonFlattener
         fwrite($handle, "\xEF\xBB\xBF"); // BOM UTF-8
         fputcsv($handle, $headers);
 
-        $preview    = [];
-        $total_rows = 0;
+        $preview        = [];
+        $total_rows     = 0;
+        $overflow_count = 0;
+        $overflow_first = null;
 
         foreach ($products as $product) {
-            $flat = FeedRowFlattener::flatten($product);
+            $dropped = 0;
+            $flat    = FeedRowFlattener::flatten($product, $dropped);
+            if ($dropped > 0) {
+                $overflow_count++;
+                $overflow_first ??= (string) ($product['product_code'] ?? $product['product_id'] ?? '');
+            }
             $row  = [];
             foreach ($headers as $h) {
                 $row[] = $flat[$h] ?? '';
@@ -136,6 +143,7 @@ class JsonFlattener
         }
 
         fclose($handle);
+        FeedRowFlattener::recordOverflow($csv_path, $overflow_count, (string) $overflow_first);
 
         return [
             'file_path'   => $csv_path,
@@ -189,7 +197,7 @@ class JsonFlattener
                 }
             }
         }
-        return $headers;
+        return FeedRowFlattener::completeImageHeaders($headers);
     }
 
     private static function tempPath(string $ext): string

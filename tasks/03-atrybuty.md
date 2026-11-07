@@ -1,10 +1,10 @@
 ---
 id: "03"
-status: blocked
+status: done
 commit: "feat: [03] import product attributes from xml and json"
 after: ["02"]
-closed: ""
-note: "Decyzje D1–D6 do potwierdzenia."
+closed: "2026-11-07"
+note: "Wykonane z domyślnymi D1–D6 (użytkownik: Wykonaj)."
 ---
 
 # 03 — Import atrybutów produktu (XML i JSON)
